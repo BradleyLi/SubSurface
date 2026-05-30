@@ -21,7 +21,7 @@ from data_utils  import get_pipes, get_ai_response
 
 inject_css()
 
-df = get_pipes()
+df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
@@ -52,6 +52,13 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.divider()
+
+    st.toggle(
+        "🌐 Use Toronto Open Data",
+        value=st.session_state.get("use_real_data", False),
+        help="Fetch live watermain geometry from open.toronto.ca",
+        key="use_real_data",
+    )
 
     st.markdown('<div class="sidebar-label">AI Model</div>', unsafe_allow_html=True)
     st.markdown(

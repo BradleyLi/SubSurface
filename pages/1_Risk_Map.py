@@ -22,7 +22,7 @@ from data_utils  import get_pipes, get_shap, RISK_COLORS
 
 inject_css()
 
-df = get_pipes()
+df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
 # ── Sidebar filters ─────────────────────────────────────────────────────────
 with st.sidebar:
@@ -38,6 +38,17 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.divider()
+
+    use_real = st.toggle(
+        "🌐 Use Toronto Open Data",
+        value=st.session_state.get("use_real_data", False),
+        help="Fetch live watermain geometry from open.toronto.ca",
+        key="use_real_data",
+    )
+    if use_real:
+        st.caption("🟢 Live — Toronto Open Data")
+    else:
+        st.caption("🔵 Demo — synthetic data")
 
     st.markdown('<div class="sidebar-label">Risk Filter</div>', unsafe_allow_html=True)
     risk_filter = st.multiselect(

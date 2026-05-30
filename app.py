@@ -22,7 +22,7 @@ from data_utils  import get_pipes, RISK_COLORS
 inject_css()
 
 # ── Load data ──────────────────────────────────────────────────────────────
-df = get_pipes()
+df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -48,6 +48,26 @@ with st.sidebar:
     st.page_link("pages/2_Cascade_Simulator.py",       label="💥  Cascade Simulator", )
     st.page_link("pages/3_Decision_Engine.py",         label="📋  Decision Engine",   )
     st.page_link("pages/4_AI_Assistant.py",            label="🤖  AI Assistant",      )
+    st.divider()
+    st.markdown('<div class="sidebar-label">Data Source</div>', unsafe_allow_html=True)
+
+    use_real = st.toggle(
+        "🌐 Use Toronto Open Data",
+        value=st.session_state.get("use_real_data", False),
+        help=(
+            "Fetches live GeoJSON from open.toronto.ca — "
+            "Transmission Watermain (~400 features, fully loaded) + "
+            "Distribution Watermain (~60 000 features, 3 000 sampled). "
+            "Requires internet. First load ~15 s, then cached 1 hr."
+        ),
+        key="use_real_data",
+    )
+    if use_real:
+        st.caption("🟢 Live — Transmission + Distribution Watermains")
+        st.caption("📦 Source: open.toronto.ca · package: watermains")
+    else:
+        st.caption("🔵 Demo — 600 synthetic pipe segments")
+
     st.divider()
     st.markdown('<div class="sidebar-label">Data Status</div>', unsafe_allow_html=True)
     st.caption("📡 Open Data Toronto · Live feed")

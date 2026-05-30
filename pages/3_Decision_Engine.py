@@ -24,7 +24,7 @@ from data_utils  import get_pipes, RISK_COLORS
 
 inject_css()
 
-df = get_pipes()
+df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -40,6 +40,14 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.divider()
+
+    st.toggle(
+        "🌐 Use Toronto Open Data",
+        value=st.session_state.get("use_real_data", False),
+        help="Fetch live watermain geometry from open.toronto.ca",
+        key="use_real_data",
+    )
+
     st.markdown('<div class="sidebar-label">Budget Constraint</div>',
                 unsafe_allow_html=True)
     budget = st.slider("Annual Budget ($)", 1_000_000, 20_000_000, 5_000_000,

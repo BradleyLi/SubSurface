@@ -1,10 +1,14 @@
 """
-data_utils.py — Synthetic pipe network data for CityNerve demo
-Generates realistic Toronto watermain segment data with risk scores,
-SHAP feature contributions, and cascade impact estimates.
+data_utils.py — Pipe network data for CityNerve.
+Supports two modes:
+  • Synthetic (default) — generated locally, always works offline.
+  • Real          — fetched live from Toronto Open Data via real_data.py.
+
+Toggle via the sidebar switch or the USE_REAL_DATA env variable.
 """
 
 from __future__ import annotations
+import os
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -54,7 +58,24 @@ N_PER_WARD = 100   # 600 total pipe segments
 # ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner=False)
-def get_pipes() -> pd.DataFrame:
+def get_pipes(use_real: bool = False) -> pd.DataFrame:
+    """
+    Return pipe DataFrame in canonical schema.
+    Pass use_real=True to fetch live Toronto Open Data, False for synthetic demo.
+    The bool argument is part of the cache key, so toggling it fetches fresh data.
+    """
+    if use_real:
+        try:
+            from real_data import get_real_pipes
+            return get_real_pipes()
+        except Exception as e:
+            st.warning(f"⚠️ Could not load real data ({e}). Falling back to synthetic data.")
+
+    return _get_synthetic_pipes()
+
+
+@st.cache_data(show_spinner=False)
+def _get_synthetic_pipes() -> pd.DataFrame:
     rng = np.random.default_rng(42)
     rows: list[dict] = []
 

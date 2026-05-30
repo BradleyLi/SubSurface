@@ -18,9 +18,44 @@ html, body, [class*="css"], .stApp {
 }
 
 /* ── Hide Streamlit chrome ── */
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
 .stDeployButton { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+
+/* ── Header bar ── */
+[data-testid="stHeader"] {
+    background-color: #07101f !important;
+    border-bottom: 1px solid #1de9b6 !important;
+}
+
+/* ── Lock sidebar open — hide the collapse button entirely ── */
+[data-testid="stSidebarCollapseButton"] {
+    display: none !important;
+}
+
+/* ── Make the "re-open sidebar" arrow visible if sidebar ever collapses ── */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: #0d1b2a !important;
+    border: 1px solid #1de9b6 !important;
+    border-radius: 6px !important;
+}
+[data-testid="collapsedControl"] button {
+    background: #0d1b2a !important;
+    border: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: #1de9b6 !important;
+    stroke: #1de9b6 !important;
+    color: #1de9b6 !important;
+}
+
 
 /* ── Backgrounds ── */
 .stApp { background-color: #050b18 !important; }
