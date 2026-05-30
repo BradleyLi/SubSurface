@@ -1,7 +1,7 @@
 """
-pages/5_Distribution_Watermain.py — Distribution Watermain Explorer
-Fetches the full Distribution Watermain GeoJSON layer from Toronto Open Data
-and renders an interactive map with material, diameter, and age filters.
+pages/5_Distribution_Watermain.py — Toronto Watermain Explorer
+Loads Distribution and/or Transmission Watermain GeoJSON layers from
+Toronto Open Data and renders an interactive map with filters.
 """
 
 import sys, os
@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 
 st.set_page_config(
-    page_title="Distribution Watermains · CityNerve",
+    page_title="Toronto Watermains · CityNerve",
     page_icon="🚰",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -44,6 +44,10 @@ MAT_COLORS: dict[str, str] = {
     "PVC":              "#66bb6a",
 }
 DEFAULT_MAT_COLOR = "#90a4ae"
+TYPE_COLORS: dict[str, str] = {
+    "Transmission": "#1de9b6",
+    "Distribution": "#4fc3f7",
+}
 
 # ── Top Nav ───────────────────────────────────────────────────────────────────
 logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
@@ -71,7 +75,7 @@ with toggle_col:
 st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown(section_title("🚰 Distribution Watermain Explorer"), unsafe_allow_html=True)
+st.markdown(section_title("🚰 Toronto Watermain Explorer"), unsafe_allow_html=True)
 st.markdown(
     '<p style="color:#8faabf;margin-top:-0.5rem;margin-bottom:1.2rem;">'
     "Live GeoJSON · Toronto Open Data · WGS84"
@@ -81,15 +85,38 @@ st.markdown(
 
 # ── Fetch data ────────────────────────────────────────────────────────────────
 use_real = st.session_state.get("use_real_dist_data", True)
+if use_real:
+    layer_mode = st.radio(
+        "Layer",
+        ["Distribution", "Transmission", "Both"],
+        horizontal=True,
+        key="dm_layer_mode",
+    )
+else:
+    layer_mode = "Synthetic"
 
 @st.cache_data(show_spinner=False)
-def _load_dist(use_real_flag: bool) -> tuple[pd.DataFrame, str]:
+def _load_dist(use_real_flag: bool, layer_mode_flag: str) -> tuple[pd.DataFrame, str]:
     """Return (df, source_label). Falls back to synthetic if not in real-data mode."""
     if use_real_flag:
         from data_utils import get_distribution_watermains
-        # Load full Toronto Distribution layer (no sampling cap).
-        df = get_distribution_watermains(max_features=None)
-        return df, "Toronto Open Data · Distribution Watermain GeoJSON"
+        from real_data import get_real_pipes
+
+        if layer_mode_flag == "Distribution":
+            # Load full Toronto Distribution layer (no sampling cap).
+            df = get_distribution_watermains(max_features=None)
+            return df, "Toronto Open Data · Distribution Watermain GeoJSON"
+
+        # For Transmission or Both, fetch full real dataset and filter.
+        real_df = get_real_pipes(max_dist=None)
+        if layer_mode_flag == "Transmission":
+            df = real_df[real_df["pipe_type"] == "Transmission"].copy()
+            return df, "Toronto Open Data · Transmission Watermain GeoJSON"
+        if layer_mode_flag == "Both":
+            df = real_df[real_df["pipe_type"].isin(["Distribution", "Transmission"])].copy()
+            return df, "Toronto Open Data · Distribution + Transmission GeoJSON"
+
+        raise ValueError(f"Unsupported layer mode: {layer_mode_flag}")
     else:
         from data_utils import get_pipes
         df = get_pipes(use_real=False)
@@ -97,9 +124,9 @@ def _load_dist(use_real_flag: bool) -> tuple[pd.DataFrame, str]:
         return df, "Synthetic demo data (enable Toronto Open Data toggle for live feed)"
 
 
-with st.spinner("Loading distribution watermain data…"):
+with st.spinner(f"Loading {layer_mode.lower()} watermain data…"):
     try:
-        df, data_source = _load_dist(use_real)
+        df, data_source = _load_dist(use_real, layer_mode)
     except Exception as exc:
         st.error(f"⚠️ Could not load data: {exc}")
         st.stop()
@@ -160,10 +187,23 @@ with fc3:
     )
 
 with fc4:
+    color_options = ["Material", "Risk Level", "Diameter", "Age"]
+    if "pipe_type" in df.columns and df["pipe_type"].nunique() > 1:
+        color_options.insert(1, "Pipe Type")
     color_by = st.selectbox(
         "Color by",
-        ["Material", "Risk Level", "Diameter", "Age"],
+        color_options,
         key="dm_color",
+    )
+
+type_options = sorted(df["pipe_type"].unique()) if "pipe_type" in df.columns else []
+type_filter = type_options
+if len(type_options) > 1:
+    type_filter = st.multiselect(
+        "Pipe Type",
+        type_options,
+        default=type_options,
+        key="dm_type",
     )
 
 # Apply filters
@@ -172,6 +212,8 @@ mask = (
     df["diameter_mm"].between(*diam_range) &
     df["install_year"].between(*yr_range)
 )
+if len(type_options) > 1 and type_filter:
+    mask = mask & df["pipe_type"].isin(type_filter)
 dff = df[mask]
 
 st.markdown(
@@ -197,6 +239,25 @@ if color_by == "Material":
             mode="lines",
             line=dict(color=color, width=1.6),
             name=mat,
+            hoverinfo="name",
+        ))
+
+elif color_by == "Pipe Type":
+    for ptype in ["Distribution", "Transmission"]:
+        grp = dff[dff["pipe_type"] == ptype]
+        if grp.empty:
+            continue
+        color = TYPE_COLORS.get(ptype, DEFAULT_MAT_COLOR)
+        width = 2.0 if ptype == "Distribution" else 3.0
+        lats, lons = [], []
+        for _, row in grp.iterrows():
+            lats += [row["lat0"], row["lat1"], None]
+            lons += [row["lon0"], row["lon1"], None]
+        fig.add_trace(go.Scattermapbox(
+            lat=lats, lon=lons,
+            mode="lines",
+            line=dict(color=color, width=width),
+            name=ptype,
             hoverinfo="name",
         ))
 
@@ -361,7 +422,7 @@ with tb2:
 # ── Raw data explorer ─────────────────────────────────────────────────────────
 with st.expander("🔍 Raw segment data", expanded=False):
     display_cols = [c for c in [
-        "pipe_id", "ward", "material", "diameter_mm", "length_m",
+        "pipe_id", "pipe_type", "ward", "material", "diameter_mm", "length_m",
         "install_year", "age", "risk_level", "risk_score", "street",
     ] if c in dff.columns]
     st.dataframe(
