@@ -20,7 +20,8 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title, risk_badge
-from data_utils  import get_pipes, RISK_COLORS
+from api_client import get_pipes_api
+from data_utils  import RISK_COLORS
 
 inject_css()
 
@@ -36,7 +37,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-df = get_pipes(use_real=st.session_state.get("use_real_data", False))
+df = get_pipes_api(use_real=st.session_state.get("use_real_data", False))
 
 # ── Top Nav ───────────────────────────────────────────────────────────────────
 logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])

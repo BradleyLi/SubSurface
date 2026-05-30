@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title
-from data_utils  import get_pipes, get_ai_response
+from api_client import get_ai_response_api, get_pipes_api
 
 inject_css()
 
@@ -33,7 +33,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-df = get_pipes(use_real=st.session_state.get("use_real_data", False))
+df = get_pipes_api(use_real=st.session_state.get("use_real_data", False))
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
@@ -184,18 +184,14 @@ with chat_col:
     if needs_response:
         last_query = st.session_state.messages[-1]["content"]
 
-        # Apply ward/material filter to df if set
-        context_df = df.copy()
-        if focus_ward != "All Wards":
-            context_df = context_df[context_df["ward"] == focus_ward]
-        if focus_material != "All Materials":
-            context_df = context_df[context_df["material"] == focus_material]
-        if len(context_df) == 0:
-            context_df = df  # fallback
-
         with st.spinner("Nemotron processing..."):
             time.sleep(0.9)
-            ai_reply = get_ai_response(last_query, context_df)
+            ai_reply = get_ai_response_api(
+                query=last_query,
+                use_real=st.session_state.get("use_real_data", False),
+                focus_ward=focus_ward,
+                focus_material=focus_material,
+            )
 
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
         st.rerun()

@@ -21,7 +21,8 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title, risk_badge
-from data_utils  import get_pipes, get_shap, RISK_COLORS
+from api_client import get_pipes_api
+from data_utils  import get_shap, RISK_COLORS
 
 inject_css()
 
@@ -38,7 +39,7 @@ st.markdown(
 )
 
 use_real = st.session_state.get("use_real_data", False)
-df = get_pipes(use_real=use_real)
+df = get_pipes_api(use_real=use_real)
 
 pipe_types_available = sorted(df["pipe_type"].unique()) if "pipe_type" in df.columns else []
 has_layers = len(pipe_types_available) > 1

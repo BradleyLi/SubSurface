@@ -4,10 +4,18 @@ Predictive Infrastructure Intelligence for Toronto's Watermain Network.
 GPU-accelerated (NVIDIA RAPIDS) pipeline that predicts watermain failures, explains risk factors, and simulates cascade effects to optimize municipal capital expenditure.  
 Built for the NVIDIA Spark Hackathon — Toronto.
 
-## Running the UI
+## Running Backend + UI
 
 ```bash
 pip install -r requirements.txt
+uvicorn backend.main:app --reload --port 8000
+```
+
+In a second terminal:
+
+```bash
+# Optional if you run API elsewhere:
+# export CITYNERVE_API_URL="http://127.0.0.1:8000"
 streamlit run app.py
 ```
 

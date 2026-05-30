@@ -20,6 +20,7 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title
+from api_client import get_watermains_layer_api
 from data_utils import RISK_COLORS
 
 inject_css()
@@ -98,30 +99,19 @@ else:
 @st.cache_data(show_spinner=False)
 def _load_dist(use_real_flag: bool, layer_mode_flag: str) -> tuple[pd.DataFrame, str]:
     """Return (df, source_label). Falls back to synthetic if not in real-data mode."""
-    if use_real_flag:
-        from data_utils import get_distribution_watermains
-        from real_data import get_real_pipes
-
-        if layer_mode_flag == "Distribution":
-            # Load full Toronto Distribution layer (no sampling cap).
-            df = get_distribution_watermains(max_features=None)
-            return df, "Toronto Open Data · Distribution Watermain GeoJSON"
-
-        # For Transmission or Both, fetch full real dataset and filter.
-        real_df = get_real_pipes(max_dist=None)
-        if layer_mode_flag == "Transmission":
-            df = real_df[real_df["pipe_type"] == "Transmission"].copy()
-            return df, "Toronto Open Data · Transmission Watermain GeoJSON"
-        if layer_mode_flag == "Both":
-            df = real_df[real_df["pipe_type"].isin(["Distribution", "Transmission"])].copy()
-            return df, "Toronto Open Data · Distribution + Transmission GeoJSON"
-
-        raise ValueError(f"Unsupported layer mode: {layer_mode_flag}")
-    else:
-        from data_utils import get_pipes
-        df = get_pipes(use_real=False)
-        df = df[df["pipe_type"] == "Synthetic"].copy()
-        return df, "Synthetic demo data (enable Toronto Open Data toggle for live feed)"
+    selected_mode = layer_mode_flag if use_real_flag else "Synthetic"
+    df = get_watermains_layer_api(
+        use_real=use_real_flag,
+        layer_mode=selected_mode,
+        max_features=None,
+    )
+    labels = {
+        "Distribution": "Toronto Open Data · Distribution Watermain GeoJSON",
+        "Transmission": "Toronto Open Data · Transmission Watermain GeoJSON",
+        "Both": "Toronto Open Data · Distribution + Transmission GeoJSON",
+        "Synthetic": "Synthetic demo data (enable Toronto Open Data toggle for live feed)",
+    }
+    return df, labels.get(selected_mode, "Watermain data")
 
 
 with st.spinner(f"Loading {layer_mode.lower()} watermain data…"):
