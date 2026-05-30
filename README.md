@@ -6,9 +6,17 @@ Built for the NVIDIA Spark Hackathon — Toronto.
 
 ## Running Backend + UI
 
+**Start order on GX10 (full demo with local LLMs):**
+
+1. Dual Ollama — W2 `:11434`, W1 `:11436` ([cheatsheet](GX10-Nemotron-Ollama-Cheatsheet.md))
+2. NemoClaw sandboxes `hackathon-w1` + `nemotron-3-super` ([agent/nemoclaw/README.md](agent/nemoclaw/README.md))
+3. FastAPI backend
+4. Streamlit UI (calls FastAPI only, not Ollama)
+
 ```bash
+cp agent/.env.example .env   # optional; defaults match GX10 hackathon setup
 pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 In a second terminal:
@@ -16,8 +24,23 @@ In a second terminal:
 ```bash
 # Optional if you run API elsewhere:
 # export CITYNERVE_API_URL="http://127.0.0.1:8000"
-streamlit run app.py
+streamlit run app.py --server.port 8501
 ```
+
+Verify Ollama endpoints: `./agent/scripts/check_endpoints.sh`
+
+## Agent + app stack
+
+| Piece | Role | Port |
+|-------|------|------|
+| **XGBoost / model/** | Deterministic risk scoring | — |
+| **backend/** (FastAPI) | API — train/predict, future W1/W2 LLM routes via `agent.harness` | 8000 |
+| **app.py + pages/** (Streamlit) | UI — map, simulator, assistant; HTTP to FastAPI only | 8501 |
+| **Ollama W1** | Fast summaries (`nemotron-nano:12b-v2`) | 11436 |
+| **Ollama W2** | Deep analysis (`nemotron-3-super:latest`) | 11434 |
+| **NemoClaw** | Agent sandboxes for investigation | see [agent/nemoclaw/](agent/nemoclaw/) |
+
+Details: [agent/README.md](agent/README.md) · [GX10-Nemotron-Ollama-Cheatsheet.md](GX10-Nemotron-Ollama-Cheatsheet.md)
 
 ## Project Structure
 
@@ -26,7 +49,7 @@ SubSurface/
 ├── frontend/        # shared frontend modules (new)
 ├── backend/         # FastAPI service
 ├── model/           # risk/model logic
-├── agent/           # human-readable agent narratives
+├── agent/           # harness (Ollama client) + narrative helpers
 ├── app.py           # Streamlit main page (entrypoint)
 └── pages/           # Streamlit multipage views
 ```
