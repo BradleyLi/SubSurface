@@ -20,6 +20,8 @@ st.set_page_config(
 from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils import get_shap, RISK_COLORS, MATERIAL_RISK
+from model import failure_summary
+from agent import agent_failure_explanation
 
 inject_css()
 
@@ -52,37 +54,7 @@ has_layers = len(pipe_types_available) > 1
 TYPE_COLORS = {"Transmission": "#1de9b6", "Distribution": "#4fc3f7", "Synthetic": "#8faabf"}
 TYPE_WIDTHS = {"Transmission": 3.5, "Distribution": 1.8, "Synthetic": 2.0}
 
-# ── Failure reason generator ───────────────────────────────────────────────
-MATERIAL_LIFE = {
-    "Cast Iron": 60, "Lead": 40, "Clay": 50,
-    "Asbestos Cement": 55, "Galvanized": 50,
-    "Concrete": 60, "Ductile Iron": 100, "PVC": 80,
-}
-
-def failure_summary(row) -> str:
-    reasons = []
-    mat  = str(row.get("material", ""))
-    age  = int(row.get("age", 0))
-    life = MATERIAL_LIFE.get(mat, 60)
-    if age > life:
-        reasons.append(f"⚠ {age}yr {mat} (>{life}yr life)")
-    elif age > life * 0.75:
-        reasons.append(f"↑ {age}yr {mat} (near EOL)")
-    trees = int(row.get("tree_count_5m", 0))
-    if trees > 5:
-        reasons.append(f"🌳 {trees} trees within 5m")
-    comp = int(row.get("complaints_12mo", 0))
-    if comp > 3:
-        reasons.append(f"📞 {comp} complaints/yr")
-    surf = int(row.get("years_since_resurfacing", 0))
-    if surf > 20:
-        reasons.append(f"🛣 {surf}yr since resurfacing")
-    brk = int(row.get("break_count_10yr", 0))
-    if brk >= 3:
-        reasons.append(f"🔧 {brk} breaks (10yr)")
-    if not reasons:
-        reasons.append(f"Risk score {row['risk_score']:.0f}/100")
-    return " · ".join(reasons)
+# ── Failure reason model + agent narrative imported from dedicated modules ──
 
 # ════════════════════════════════════════════════════════════════════════════
 # TOP NAV
@@ -292,6 +264,33 @@ with map_col:
             name="", showlegend=False,
         ))
 
+    # Highlight pipes selected in the Priority Queue checkboxes.
+    selected_ids = st.session_state.get("selected_pipe_ids", [])
+    selected_on_map = fdf[fdf["pipe_id"].isin(selected_ids)] if selected_ids else fdf.iloc[0:0]
+    if not selected_on_map.empty:
+        sel_lats, sel_lons = [], []
+        for _, r in selected_on_map.iterrows():
+            sel_lats.extend([r["lat0"], r["lat1"], None])
+            sel_lons.extend([r["lon0"], r["lon1"], None])
+
+        # Outer light stroke creates contrast on dark basemap and colored pipes.
+        fig.add_trace(go.Scattermap(
+            lat=sel_lats, lon=sel_lons,
+            mode="lines",
+            line=dict(width=8, color="rgba(232,244,253,0.75)"),
+            hoverinfo="none",
+            showlegend=False,
+        ))
+        # Inner accent line identifies checked pipes clearly.
+        fig.add_trace(go.Scattermap(
+            lat=sel_lats, lon=sel_lons,
+            mode="lines",
+            line=dict(width=4.6, color="#ff4fd8"),
+            name=f"Checked Pipes ({len(selected_on_map)})",
+            hoverinfo="none",
+            showlegend=True,
+        ))
+
     fig.update_layout(
         map=dict(
             style="carto-darkmatter",
@@ -446,35 +445,76 @@ with tab1:
         "Ward":         queue_df["ward"].values,
         "Material":     queue_df["material"].values,
         "Age (yr)":     queue_df["age"].values,
-        "Why Failing":  queue_df["failure_summary"].values,
         "Replace $":    queue_df["replacement_cost"].values,
         "Savings $":    queue_df["expected_savings"].values,
         "In Budget":    queue_df["in_budget"].values,
     })
 
-    edited = st.data_editor(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Select":     st.column_config.CheckboxColumn("✓", width="small"),
-            "Risk %":     st.column_config.ProgressColumn("Risk %", min_value=0, max_value=100, format="%.1f"),
-            "Replace $":  st.column_config.NumberColumn("Replace $",  format="$%d"),
-            "Savings $":  st.column_config.NumberColumn("Savings $",  format="$%d"),
-            "In Budget":  st.column_config.CheckboxColumn("Budget", width="small"),
-            "Why Failing": st.column_config.TextColumn("Why Failing", width="large"),
-        },
-        disabled=[
-            "Pipe ID", "Risk Level", "Risk %", "Ward", "Material",
-            "Age (yr)", "Why Failing", "Replace $", "Savings $", "In Budget",
-        ],
-        height=440,
-        key="priority_queue_editor",
-    )
+    queue_col, agent_col = st.columns([2.3, 1.3], gap="medium")
+
+    with queue_col:
+        edited = st.data_editor(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Select":     st.column_config.CheckboxColumn("✓", width="small"),
+                "Risk %":     st.column_config.ProgressColumn("Risk %", min_value=0, max_value=100, format="%.1f"),
+                "Replace $":  st.column_config.NumberColumn("Replace $",  format="$%d"),
+                "Savings $":  st.column_config.NumberColumn("Savings $",  format="$%d"),
+                "In Budget":  st.column_config.CheckboxColumn("Budget", width="small"),
+            },
+            disabled=[
+                "Pipe ID", "Risk Level", "Risk %", "Ward", "Material",
+                "Age (yr)", "Replace $", "Savings $", "In Budget",
+            ],
+            height=440,
+            key="priority_queue_editor",
+        )
 
     # Sync selection back to session state
     sel_pipe_ids = edited.loc[edited["Select"], "Pipe ID"].tolist()
-    st.session_state.selected_pipe_ids = sel_pipe_ids
+    prev_sel = st.session_state.get("selected_pipe_ids", [])
+    if sel_pipe_ids != prev_sel:
+        st.session_state.selected_pipe_ids = sel_pipe_ids
+        st.rerun()
+
+    with agent_col:
+        section_title("🤖 Why Failing Agent")
+        st.caption(
+            "Human-readable diagnosis for checked pipes. "
+            "Select rows in the queue to update this panel."
+        )
+        if sel_pipe_ids:
+            selected_for_agent = ranked[ranked["pipe_id"].isin(sel_pipe_ids)].head(4)
+            for _, r in selected_for_agent.iterrows():
+                lvl = str(r["risk_level"])
+                lvl_color = RISK_COLORS.get(lvl, "#8faabf")
+                st.markdown(
+                    f"""
+                    <div class="cn-card" style="margin-bottom:.5rem;border-left:3px solid {lvl_color}">
+                        <div class="cn-card-title">{r["pipe_id"]} · {lvl}</div>
+                        <div style="font-size:.78rem;line-height:1.45;color:#c9d8ea">
+                            {agent_failure_explanation(r)}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            if len(sel_pipe_ids) > len(selected_for_agent):
+                st.caption(f"Showing first {len(selected_for_agent)} selected pipes.")
+        else:
+            st.markdown(
+                """
+                <div class="cn-card" style="border-style:dashed">
+                    <div style="font-size:.8rem;color:#8faabf;line-height:1.5">
+                        The agent is waiting for your selection.<br>
+                        Check one or more pipes in the table to get a narrative explanation.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     n_sel = len(sel_pipe_ids)
 
