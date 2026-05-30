@@ -19,6 +19,23 @@ In a second terminal:
 streamlit run app.py
 ```
 
+## Project Structure
+
+```text
+SubSurface/
+├── frontend/        # shared frontend modules (new)
+├── backend/         # FastAPI service
+├── model/           # risk/model logic
+├── agent/           # human-readable agent narratives
+├── app.py           # Streamlit main page (entrypoint)
+└── pages/           # Streamlit multipage views
+```
+
+Notes:
+- `app.py` and `pages/` stay at root to preserve Streamlit multipage discovery.
+- New model logic lives in `model/risk_profile.py`.
+- New agent narrative logic lives in `agent/why_failing_agent.py`.
+
 ## UI Pages
 
 | Page | Description |
