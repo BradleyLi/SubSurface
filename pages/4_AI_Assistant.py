@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="AI Assistant · CityNerve",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 from app_styles import inject_css, section_title
@@ -21,12 +21,23 @@ from data_utils  import get_pipes, get_ai_response
 
 inject_css()
 
+# ── Hide sidebar, use top nav ──────────────────────────────────────────────
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"]    { display: none !important; }
+    [data-testid="stSidebarNav"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Seed with a greeting
     st.session_state.messages.append({
         "role": "assistant",
         "content": (
@@ -38,81 +49,31 @@ if "messages" not in st.session_state:
         ),
     })
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
+# ── Top Nav ───────────────────────────────────────────────────────────────────
+logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
+with logo_col:
     st.markdown(
-        """
-        <div style="padding:.8rem 0 .4rem">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;
-                        font-weight:900;color:#e0eaf6">
-                CITY<span style="color:#1de9b6">NERVE</span>
-            </div>
-        </div>
-        """,
+        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
+        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
         unsafe_allow_html=True,
     )
-    st.divider()
-
+with nav1:
+    st.page_link("app.py", label="🏠 Overview")
+with nav2:
+    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
+with nav3:
+    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
+with nav4:
+    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
+with toggle_col:
     st.toggle(
-        "🌐 Use Toronto Open Data",
+        "🌐 Toronto Open Data",
         value=st.session_state.get("use_real_data", False),
-        help="Fetch live watermain geometry from open.toronto.ca",
         key="use_real_data",
     )
+st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-label">AI Model</div>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class="cn-card" style="padding:.8rem 1rem">
-            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
-                <div style="width:8px;height:8px;border-radius:50%;background:#1de9b6;
-                            animation:pulse 1.8s ease-in-out infinite"></div>
-                <span style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;
-                             color:#1de9b6">Nemotron-3</span>
-            </div>
-            <div style="font-size:.68rem;color:#3d5a78">
-                NVIDIA NIM · Inference API<br>
-                Context: 600 pipe segments<br>
-                Mode: Infrastructure Q&A
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="sidebar-label">Quick Filters</div>', unsafe_allow_html=True)
-    focus_ward = st.selectbox(
-        "Focus on Ward",
-        options=["All Wards"] + sorted(df["ward"].unique()),
-        label_visibility="collapsed",
-    )
-    focus_material = st.selectbox(
-        "Focus on Material",
-        options=["All Materials"] + sorted(df["material"].unique()),
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    if st.button("🗑 Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-    st.divider()
-    st.markdown(
-        """
-        <div style="font-size:.7rem;color:#3d5a78;line-height:1.6">
-        <b style="color:#5a7a9a">Example questions:</b><br>
-        • What are the top 5 riskiest pipes?<br>
-        • Which pipes should we replace first?<br>
-        • What happens if WM-0023 breaks?<br>
-        • What-if rainfall increases 30%?<br>
-        • How much could we save in North York?
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ── Header ────────────────────────────────────────────────────────────────────
+# ── Header + Controls row ─────────────────────────────────────────────────────
 st.markdown(
     """
     <div class="cn-header">
@@ -128,6 +89,43 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# Inline controls (were in sidebar)
+ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([2, 2, 1.5, 1], gap="medium")
+with ctrl1:
+    focus_ward = st.selectbox(
+        "Focus on Ward",
+        options=["All Wards"] + sorted(df["ward"].unique()),
+    )
+with ctrl2:
+    focus_material = st.selectbox(
+        "Focus on Material",
+        options=["All Materials"] + sorted(df["material"].unique()),
+    )
+with ctrl3:
+    st.markdown(
+        """
+        <div class="cn-card" style="padding:.55rem .9rem;margin-top:.05rem">
+            <div style="display:flex;align-items:center;gap:.5rem">
+                <div style="width:7px;height:7px;border-radius:50%;background:#1de9b6;
+                            animation:pulse 1.8s ease-in-out infinite;flex-shrink:0"></div>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:.75rem;
+                             color:#1de9b6">Nemotron-3</span>
+            </div>
+            <div style="font-size:.65rem;color:#3d5a78;margin-top:.2rem">
+                NVIDIA NIM · Infrastructure Q&A
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with ctrl4:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🗑 Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Quick Action Buttons ───────────────────────────────────────────────────────
 section_title("Quick Actions")

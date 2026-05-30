@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="Decision Engine · CityNerve",
     page_icon="📋",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 from app_styles import inject_css, section_title, risk_badge
@@ -24,69 +24,66 @@ from data_utils  import get_pipes, RISK_COLORS
 
 inject_css()
 
+# ── Hide sidebar, use top nav ──────────────────────────────────────────────
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"]    { display: none !important; }
+    [data-testid="stSidebarNav"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
-with st.sidebar:
+# ── Top Nav ───────────────────────────────────────────────────────────────────
+logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
+with logo_col:
     st.markdown(
-        """
-        <div style="padding:.8rem 0 .4rem">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;
-                        font-weight:900;color:#e0eaf6">
-                CITY<span style="color:#1de9b6">NERVE</span>
-            </div>
-        </div>
-        """,
+        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
+        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
         unsafe_allow_html=True,
     )
-    st.divider()
-
+with nav1:
+    st.page_link("app.py", label="🏠 Overview")
+with nav2:
+    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
+with nav3:
+    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
+with nav4:
+    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
+with toggle_col:
     st.toggle(
-        "🌐 Use Toronto Open Data",
+        "🌐 Toronto Open Data",
         value=st.session_state.get("use_real_data", False),
-        help="Fetch live watermain geometry from open.toronto.ca",
         key="use_real_data",
     )
+st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-label">Budget Constraint</div>',
-                unsafe_allow_html=True)
+# Inline controls (were in sidebar)
+ctrl1, ctrl2, ctrl3 = st.columns([2, 2, 3], gap="medium")
+with ctrl1:
     budget = st.slider("Annual Budget ($)", 1_000_000, 20_000_000, 5_000_000,
-                        step=500_000, format="$%d",
-                        label_visibility="collapsed")
+                       step=500_000, format="$%d")
     st.markdown(
-        f'<div style="font-size:.75rem;color:#5a7a9a">Budget: '
+        f'<div style="font-size:.72rem;color:#5a7a9a;margin-top:-.3rem">Budget: '
         f'<span style="color:#1de9b6">${budget/1_000_000:.1f}M</span></div>',
         unsafe_allow_html=True,
     )
-
-    st.markdown('<div class="sidebar-label">Prioritisation Mode</div>',
-                unsafe_allow_html=True)
-    sort_mode = st.radio(
-        "Sort by",
+with ctrl2:
+    sort_mode = st.selectbox(
+        "Sort / Prioritise by",
         ["Expected Savings", "Risk Score", "Properties Affected", "Age"],
-        label_visibility="collapsed",
     )
-
-    st.markdown('<div class="sidebar-label">Filter by Ward</div>',
-                unsafe_allow_html=True)
+with ctrl3:
     ward_filter = st.multiselect(
-        "Ward", options=sorted(df["ward"].unique()),
+        "Filter by Ward", options=sorted(df["ward"].unique()),
         default=sorted(df["ward"].unique()),
-        label_visibility="collapsed",
     )
 
-    st.divider()
-    st.markdown(
-        """
-        <div style="font-size:.72rem;color:#3d5a78;line-height:1.6">
-        <b style="color:#1de9b6">Decision Engine</b> ranks each segment by
-        failure probability × consequence severity × replacement cost efficiency.
-        <br><br>
-        <i>Cities don't repair probability. They repair risk exposure.</i>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Sort key mapping ──────────────────────────────────────────────────────────
 sort_col = {

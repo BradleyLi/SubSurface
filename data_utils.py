@@ -100,6 +100,8 @@ def _get_synthetic_pipes() -> pd.DataFrame:
                 "diameter_mm":           int(rng.choice([100, 150, 200, 250, 300, 400],
                                              p=[0.18, 0.30, 0.26, 0.12, 0.10, 0.04])),
                 "length_m":              int(rng.uniform(60, 430)),
+                "pipe_type":             "Synthetic",
+                "street":                "",
                 "lat0": lat0, "lon0": lon0, "lat1": lat1, "lon1": lon1,
                 "lat":  (lat0 + lat1) / 2,
                 "lon":  (lon0 + lon1) / 2,
@@ -255,6 +257,45 @@ Monitoring **{n_pipes}** pipe segments across Toronto's 6,100 km network.
 
 Ask me about specific pipes, replacement priorities, or "what-if" scenarios.""",
 }
+
+
+@st.cache_data(
+    show_spinner="📡 Fetching Distribution Watermains from Toronto Open Data…",
+    ttl=3600,
+)
+def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFrame:
+    """
+    Fetch only the Distribution Watermain GeoJSON layer from Toronto Open Data.
+    Pass max_features=None to load the full layer (~46k+ features).
+    Returns a DataFrame with geometry, material, diameter, install year, etc.
+    Raises RuntimeError if the dataset is unreachable.
+    """
+    from real_data import (
+        _ckan_get,
+        _find_geojson_url,
+        _fetch_geojson,
+        _parse_features,
+        _add_risk_scores,
+        DATASET_ID,
+    )
+    import numpy as np
+
+    pkg_data  = _ckan_get("package_show", {"id": DATASET_ID})
+    if not pkg_data.get("success"):
+        raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
+
+    resources = pkg_data["result"]["resources"]
+    dist_url  = _find_geojson_url(resources, "Distribution")
+    features  = _fetch_geojson(dist_url, max_features=max_features)
+    rows      = _parse_features(features, pipe_type="Distribution")
+
+    if not rows:
+        raise RuntimeError("No valid Distribution Watermain features parsed.")
+
+    df  = pd.DataFrame(rows)
+    rng = np.random.default_rng(int(df["install_year"].mean()) if len(df) else 42)
+    df  = _add_risk_scores(df, rng=rng)
+    return df
 
 
 def get_ai_response(query: str, df: pd.DataFrame) -> str:

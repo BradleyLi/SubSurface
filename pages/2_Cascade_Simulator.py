@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="Cascade Simulator · CityNerve",
     page_icon="💥",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 from app_styles import inject_css, section_title, risk_badge
@@ -24,63 +24,45 @@ from data_utils  import get_pipes, RISK_COLORS
 
 inject_css()
 
+# ── Hide sidebar, use top nav ──────────────────────────────────────────────
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"]    { display: none !important; }
+    [data-testid="stSidebarNav"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 df = get_pipes(use_real=st.session_state.get("use_real_data", False))
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
-with st.sidebar:
+# ── Top Nav ───────────────────────────────────────────────────────────────────
+logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
+with logo_col:
     st.markdown(
-        """
-        <div style="padding:.8rem 0 .4rem">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;
-                        font-weight:900;color:#e0eaf6">
-                CITY<span style="color:#1de9b6">NERVE</span>
-            </div>
-        </div>
-        """,
+        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
+        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
         unsafe_allow_html=True,
     )
-    st.divider()
-
+with nav1:
+    st.page_link("app.py", label="🏠 Overview")
+with nav2:
+    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
+with nav3:
+    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
+with nav4:
+    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
+with toggle_col:
     st.toggle(
-        "🌐 Use Toronto Open Data",
+        "🌐 Toronto Open Data",
         value=st.session_state.get("use_real_data", False),
-        help="Fetch live watermain geometry from open.toronto.ca",
         key="use_real_data",
     )
+st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-label">Select Source Pipe</div>',
-                unsafe_allow_html=True)
-
-    # Default to highest-risk pipe
-    critical = df[df["risk_level"] == "Critical"].nlargest(20, "risk_score")
-    pipe_options = critical["pipe_id"].tolist()
-    selected_id = st.selectbox(
-        "Pipe", options=pipe_options,
-        format_func=lambda x: f"{x}  ·  {df.loc[df['pipe_id']==x,'ward'].values[0]}",
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    st.markdown('<div class="sidebar-label">Simulation Settings</div>',
-                unsafe_allow_html=True)
-    radius_m = st.slider("Cascade Radius (m)", 100, 1000, 400, step=50)
-    show_pressure = st.checkbox("Show pressure contours", value=True)
-
-    st.divider()
-    st.markdown(
-        """
-        <div style="font-size:.72rem;color:#3d5a78;line-height:1.6">
-        <b style="color:#1de9b6">cuGraph</b> models the pipe network as a
-        directed graph — if segment X breaks, which downstream nodes lose
-        pressure?<br><br>
-        Each edge carries flow capacity proportional to diameter².<br>
-        Cascade propagates until pressure drops below 20 PSI.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ── Header ───────────────────────────────────────────────────────────────────
+# ── Header + Inline controls ──────────────────────────────────────────────────
 st.markdown(
     """
     <div class="cn-header">
@@ -93,6 +75,27 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# Controls row
+ctrl1, ctrl2, ctrl3 = st.columns([2, 1.5, 1.5], gap="medium")
+critical = df[df["risk_level"] == "Critical"].nlargest(20, "risk_score")
+pipe_options = critical["pipe_id"].tolist()
+with ctrl1:
+    selected_id = st.selectbox(
+        "Source Pipe (Critical segments)",
+        options=pipe_options,
+        format_func=lambda x: f"{x}  ·  {df.loc[df['pipe_id']==x,'ward'].values[0]}",
+    )
+with ctrl2:
+    radius_m = st.slider("Cascade Radius (m)", 100, 1000, 400, step=50)
+with ctrl3:
+    show_pressure = st.checkbox("Show pressure contours", value=True)
+    st.markdown(
+        '<div style="font-size:.68rem;color:#3d5a78;margin-top:.3rem">'
+        '<b style="color:#1de9b6">cuGraph</b>: directed graph · pressure '
+        'propagates until &lt; 20 PSI</div>',
+        unsafe_allow_html=True,
+    )
 
 # ── Source pipe info ──────────────────────────────────────────────────────────
 source = df[df["pipe_id"] == selected_id].iloc[0]
@@ -396,8 +399,8 @@ with stats_col:
 
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("📋 Generate Work Order"):
-            st.switch_page("pages/3_Decision_Engine.py")
+        if st.button("📋 Go to Decision Engine →"):
+            st.switch_page("app.py")
     with col_b:
         if st.button("🤖 Ask AI Assistant"):
             st.switch_page("pages/4_AI_Assistant.py")

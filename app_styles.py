@@ -27,33 +27,135 @@ footer { visibility: hidden; }
 /* ── Header bar ── */
 [data-testid="stHeader"] {
     background-color: #07101f !important;
-    border-bottom: 1px solid #1de9b6 !important;
+    border-bottom: 1px solid #1de9b620 !important;
 }
 
-/* ── Lock sidebar open — hide the collapse button entirely ── */
-[data-testid="stSidebarCollapseButton"] {
-    display: none !important;
+/* ── Sidebar (shown on sub-pages, hidden on main page via inline css) ── */
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+
+/* ── Top Nav ── */
+.cn-topnav {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0.5rem 0 0.6rem;
+}
+.cn-nav-logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 900;
+    color: #e0eaf6;
+    letter-spacing: 0.06em;
+    line-height: 1;
+}
+.cn-nav-logo span { color: #1de9b6; }
+.cn-nav-sub {
+    font-size: 0.6rem;
+    color: #3d5a78;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 400;
+    margin-left: 0.5rem;
+    font-family: 'DM Sans', sans-serif;
+}
+.cn-nav-divider {
+    height: 1px;
+    background: linear-gradient(90deg, #1de9b640 0%, #162033 40%, transparent 100%);
+    margin: 0.2rem 0 1.4rem;
 }
 
-/* ── Make the "re-open sidebar" arrow visible if sidebar ever collapses ── */
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: #0d1b2a !important;
-    border: 1px solid #1de9b6 !important;
+/* Style page links as nav tab items */
+[data-testid="stPageLink"] { display: flex !important; align-items: center !important; }
+[data-testid="stPageLink"] a {
+    color: #5a7a9a !important;
+    font-size: 0.8rem !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    text-decoration: none !important;
+    padding: 0.38rem 0.9rem !important;
     border-radius: 6px !important;
+    border: 1px solid transparent !important;
+    transition: all 0.16s ease !important;
+    white-space: nowrap !important;
+    display: inline-block !important;
 }
-[data-testid="collapsedControl"] button {
-    background: #0d1b2a !important;
-    border: none !important;
-    opacity: 1 !important;
-    visibility: visible !important;
+[data-testid="stPageLink"] a:hover {
+    color: #c9d8ea !important;
+    border-color: #1de9b630 !important;
+    background: #1de9b608 !important;
 }
-[data-testid="collapsedControl"] svg {
-    fill: #1de9b6 !important;
-    stroke: #1de9b6 !important;
+[data-testid="stPageLink"] a[aria-current="page"] {
     color: #1de9b6 !important;
+    border-color: #1de9b640 !important;
+    background: #1de9b610 !important;
+}
+
+/* ── Section flow headers ── */
+.section-flow-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1.4rem 0 1rem;
+    border-top: 1px solid #162033;
+    margin-bottom: 0.5rem;
+}
+.section-flow-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #1de9b6;
+    letter-spacing: 0.18em;
+    border: 1px solid #1de9b640;
+    border-radius: 4px;
+    padding: 2px 8px;
+    flex-shrink: 0;
+}
+.section-flow-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #e0eaf6;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+.section-flow-sub {
+    font-size: 0.7rem;
+    color: #3d5a78;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    font-family: 'DM Sans', sans-serif;
+    margin-left: 0.2rem;
+}
+
+/* ── Filter panel ── */
+.filter-panel {
+    background: #07101f;
+    border: 1px solid #162033;
+    border-radius: 10px;
+    padding: 1rem 1rem 1.2rem;
+    position: sticky;
+    top: 4rem;
+}
+.filter-panel .section-title {
+    margin-bottom: 0.6rem;
+}
+
+/* ── Quick-select pill buttons ── */
+.stButton.qs-btn > button {
+    background: transparent !important;
+    color: #5a7a9a !important;
+    border: 1px solid #162033 !important;
+    font-size: 0.72rem !important;
+    padding: 0.25rem 0.7rem !important;
+    border-radius: 20px !important;
+    letter-spacing: 0.04em;
+}
+.stButton.qs-btn > button:hover {
+    color: #1de9b6 !important;
+    border-color: #1de9b640 !important;
+    background: #1de9b608 !important;
+    opacity: 1 !important;
 }
 
 
