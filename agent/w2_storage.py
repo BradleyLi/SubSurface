@@ -27,6 +27,11 @@ def save_run(response: AnalysisRunResponse) -> Path:
         response.action_plan.model_dump_json(indent=2),
         encoding="utf-8",
     )
+    if response.bill_of_materials is not None:
+        (directory / "bill_of_materials.json").write_text(
+            response.bill_of_materials.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
 
     manifest = response.model_dump()
     (directory / "manifest.json").write_text(

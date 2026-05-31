@@ -439,9 +439,15 @@ with detail_col:
                 "confidence": voice_match.confidence,
                 "method": voice_match.method,
                 "address": addr,
+                "neighbourhood": voice_match.matched_neighbourhood,
+                "lat": voice_match.lat,
+                "lon": voice_match.lon,
             }
+            where = addr
+            if voice_match.matched_neighbourhood:
+                where = f"{addr} · neighbourhood **{voice_match.matched_neighbourhood}**"
             st.info(
-                f"Caller report at **{addr}** matched to **{voice_match.pipe_id}** "
+                f"Caller report at {where} matched to **{voice_match.pipe_id}** "
                 f"(confidence {voice_match.confidence:.0%}, {voice_match.method}). "
                 "A voice transcript orchestrator will triage caller details into each W2 role."
             )
@@ -500,8 +506,59 @@ with detail_col:
                     src = report.get("source", "")
                     st.caption(f"{label} · {src}")
                     st.markdown(report.get("markdown", "_No content_"))
+                    if role_key == "operations":
+                        bom = w2_result.get("bill_of_materials") or {}
+                        if bom.get("line_items"):
+                            st.markdown("#### Bill of Materials and supplier awards")
+                            st.table(
+                                [
+                                    {
+                                        "Item": line.get("description"),
+                                        "Qty": line.get("qty"),
+                                        "Unit": line.get("unit"),
+                                        "Supplier": line.get("chosen_supplier_name"),
+                                        "Unit $": line.get("unit_price"),
+                                        "Line $": line.get("line_total"),
+                                    }
+                                    for line in bom.get("line_items", [])
+                                ]
+                            )
+                            st.caption(
+                                f"Estimated total with contingency/tax: "
+                                f"${bom.get('total_estimate', 0):,.2f} CAD"
+                            )
+                        if bom.get("contract_awards"):
+                            st.markdown("#### Recommended supplier contract awards")
+                            st.table(
+                                [
+                                    {
+                                        "Supplier": award.get("supplier_name"),
+                                        "Type": award.get("supplier_type"),
+                                        "Scope": award.get("scope"),
+                                        "Award $": award.get("award_subtotal"),
+                                        "Approval": "Required"
+                                        if award.get("requires_human_approval", True)
+                                        else "Not flagged",
+                                    }
+                                    for award in bom.get("contract_awards", [])
+                                ]
+                            )
             with role_tabs[4]:
                 st.markdown(w2_result.get("final_markdown", ""))
+                bom = w2_result.get("bill_of_materials") or {}
+                if bom.get("contract_awards"):
+                    st.markdown("#### Recommended supplier contract awards")
+                    st.table(
+                        [
+                            {
+                                "Supplier": award.get("supplier_name"),
+                                "Type": award.get("supplier_type"),
+                                "Scope": award.get("scope"),
+                                "Award $": award.get("award_subtotal"),
+                            }
+                            for award in bom.get("contract_awards", [])
+                        ]
+                    )
                 plan = w2_result.get("action_plan", {})
                 with st.expander("Action plan (JSON)"):
                     st.json(plan)

@@ -53,6 +53,36 @@ def failure_summary_line_from_row_id(pipe_id: str, use_real: bool) -> str:
     return failure_summary(row.iloc[0])
 
 
+def _bom_award_lines(bom: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for award in bom.get("contract_awards") or []:
+        lines.append(
+            "    - Award "
+            f"{award.get('supplier_name', 'unknown supplier')} "
+            f"({award.get('supplier_type', 'supplier')}) for "
+            f"{award.get('scope', 'BoM scope')} — "
+            f"${float(award.get('award_subtotal') or 0):,.2f} "
+            "(human procurement approval required)"
+        )
+    return lines
+
+
+def _bom_summary_lines(bom: dict[str, Any]) -> list[str]:
+    if not bom:
+        return []
+    lines = [
+        "    Bill of Materials / supplier award estimate:",
+        f"      Parts subtotal:    ${float(bom.get('parts_subtotal') or 0):,.2f}",
+        f"      Services subtotal: ${float(bom.get('services_subtotal') or 0):,.2f}",
+        f"      Total estimate:    ${float(bom.get('total_estimate') or 0):,.2f}",
+    ]
+    awards = _bom_award_lines(bom)
+    if awards:
+        lines.append("    Recommended supplier contract awards:")
+        lines.extend(awards)
+    return lines
+
+
 def build_order_report_view_model(
     sel_data: pd.DataFrame,
     *,
@@ -129,6 +159,7 @@ def build_order_report_view_model(
                 continue
             plan = run.get("action_plan", {})
             actions = plan.get("recommended_actions", [])
+            bom = run.get("bill_of_materials") or {}
             w2_sections.append(
                 {
                     "pipe_id": pid,
@@ -136,6 +167,8 @@ def build_order_report_view_model(
                     "actions": [
                         f"{a.get('action', '')} ({a.get('owner', '')})" for a in actions[:5]
                     ],
+                    "bom_total_estimate": bom.get("total_estimate"),
+                    "contract_awards": bom.get("contract_awards", []),
                     "excerpt": (run.get("final_markdown") or "")[:400],
                 }
             )
@@ -165,6 +198,8 @@ def build_order_report_view_model(
             voice_meta["caller_report_linked"] = vmatch.get("pipe_id")
             voice_meta["caller_report_address"] = vmatch.get("address")
             voice_meta["caller_report_confidence"] = vmatch.get("confidence")
+            if vmatch.get("neighbourhood"):
+                voice_meta["caller_report_neighbourhood"] = vmatch.get("neighbourhood")
 
     return {
         "meta": {
@@ -268,10 +303,12 @@ def build_capital_works_report(
                 f"    - {a.get('action', '')} ({a.get('owner', '')})"
                 for a in actions[:5]
             ]
+            bom_lines = _bom_summary_lines(run.get("bill_of_materials") or {})
             final = (run.get("final_markdown") or "")[:1200]
             w2_blocks.append(
                 f"  {pid} · run {run_id} · source={source}\n"
                 + "\n".join(action_lines)
+                + ("\n" + "\n".join(bom_lines) if bom_lines else "")
                 + (f"\n    Executive excerpt: {final[:400]}…" if final else "")
             )
         if w2_blocks:
@@ -355,6 +392,12 @@ def build_work_order_text(
                     f"  • {a.get('action')} — {a.get('owner')} "
                     f"(approval required: {a.get('requires_human_approval', True)})\n"
                 )
+            bom = run.get("bill_of_materials") or {}
+            bom_lines = _bom_summary_lines(bom)
+            if bom_lines:
+                w2_appendix += "\n━━━ PROCUREMENT / SUPPLIER AWARDS (draft) ━━━━━━━━━━━\n"
+                w2_appendix += "\n".join(f"  {line.strip()}" for line in bom_lines)
+                w2_appendix += "\n"
 
     return f"""\
 CITYNERVE MAINTENANCE WORK ORDER

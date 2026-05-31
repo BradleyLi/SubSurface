@@ -5,6 +5,7 @@ Workflow 2 gateway: multi-role analysis via Nemotron Super (harness W2).
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import datetime, timezone
 
@@ -14,12 +15,21 @@ from agent.analysis_packet import build_analysis_packet
 from agent.harness.client import chat as harness_chat
 from agent.harness.endpoints import WorkflowProfile, get_endpoint
 from agent.json_utils import parse_json_object
+from agent.procurement.bom import build_bom
+from agent.procurement.bom_views import full_bom_summary, project_bom_for_role
+from agent.procurement.finalize import finalize_items_llm
+from agent.procurement.part_selection import (
+    select_candidate_items,
+    transcript_text_from_packet,
+)
 from agent.schemas import (
     ActionPlan,
     AnalysisPacket,
     AnalysisRunResponse,
+    BillOfMaterials,
     CallerReport,
     PerRoleCallerContext,
+    RecommendedAction,
     RoleName,
     RoleReport,
 )
@@ -53,6 +63,62 @@ _ROLE_CONTEXT_ATTR = {
 
 def _w2_parallel() -> bool:
     return os.getenv("W2_PARALLEL", "true").lower() in ("1", "true", "yes")
+
+
+def _append_context(existing: str, addition: str) -> str:
+    existing = (existing or "").strip()
+    addition = (addition or "").strip()
+    if not addition:
+        return existing
+    return f"{existing}\n\n{addition}".strip() if existing else addition
+
+
+def _attach_bom_context(
+    per_role_ctx: PerRoleCallerContext,
+    bom: BillOfMaterials,
+) -> PerRoleCallerContext:
+    return PerRoleCallerContext(
+        engineer=_append_context(
+            per_role_ctx.engineer,
+            project_bom_for_role(bom, RoleName.ENGINEER),
+        ),
+        police=_append_context(
+            per_role_ctx.police,
+            project_bom_for_role(bom, RoleName.POLICE),
+        ),
+        field=_append_context(
+            per_role_ctx.field,
+            project_bom_for_role(bom, RoleName.FIELD),
+        ),
+        operations=_append_context(
+            per_role_ctx.operations,
+            project_bom_for_role(bom, RoleName.OPERATIONS),
+        ),
+        synthesis=_append_context(per_role_ctx.synthesis, full_bom_summary(bom)),
+    )
+
+
+def _attach_procurement_action(plan: ActionPlan, bom: BillOfMaterials) -> ActionPlan:
+    if not bom.contract_awards:
+        return plan
+    suppliers = ", ".join(a.supplier_name for a in bom.contract_awards[:4])
+    evidence = [
+        f"{a.supplier_name}: {a.scope} ({a.award_subtotal:.2f} CAD)"
+        for a in bom.contract_awards
+    ]
+    plan.recommended_actions.append(
+        RecommendedAction(
+            action=(
+                "Review draft supplier contract awards for watermain repair BoM: "
+                f"{suppliers}"
+            ),
+            owner="Operations / Procurement",
+            urgency="near_term",
+            requires_human_approval=True,
+            evidence=evidence,
+        )
+    )
+    return plan
 
 
 def _resolve_caller_report(
@@ -179,6 +245,27 @@ async def workflow2_run(
     if resolved_caller is not None:
         per_role_ctx = await call_transcript_orchestrator(resolved_caller)
 
+    evidence = packet.assets[0]
+    transcript_text = (
+        transcript_text_from_packet(resolved_caller.transcript)
+        if resolved_caller is not None
+        else ""
+    )
+    procurement_candidates = select_candidate_items(evidence, transcript_text)
+    finalized_items, procurement_missing, procurement_source = await finalize_items_llm(
+        packet,
+        procurement_candidates,
+        role_context=per_role_ctx.synthesis,
+    )
+    bill_of_materials = build_bom(
+        pipe_id=pipe_id,
+        run_id=packet.run_id,
+        finalized_items=finalized_items,
+        missing_data=procurement_missing,
+        source=procurement_source,
+    )
+    per_role_ctx = _attach_bom_context(per_role_ctx, bill_of_materials)
+
     if _w2_parallel():
         role_reports = list(
             await asyncio.gather(
@@ -199,6 +286,9 @@ async def workflow2_run(
         model_name=model_name,
         per_role_ctx=per_role_ctx,
     )
+    action_plan = _attach_procurement_action(action_plan, bill_of_materials)
+    if "Recommended supplier contract awards" not in final_md:
+        final_md = f"{final_md}\n\n{full_bom_summary(bill_of_materials)}"
 
     role_sources = {r.source for r in role_reports}
     if synth_source == "nemotron" and role_sources == {"nemotron"}:
@@ -215,6 +305,7 @@ async def workflow2_run(
         roles=role_reports,
         final_markdown=final_md,
         action_plan=action_plan,
+        bill_of_materials=bill_of_materials,
         source=overall_source,
         models={
             "workflow2": model_name,

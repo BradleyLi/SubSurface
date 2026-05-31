@@ -14,5 +14,6 @@ pytest-asyncio>=0.23.0
 python-multipart>=0.0.9
 pipecat-ai[silero,ollama,kokoro,runner,webrtc,whisper]
 faster-whisper
+shapely>=2.0.0
 kokoro>=0.9.4
 soundfile>=0.12.1

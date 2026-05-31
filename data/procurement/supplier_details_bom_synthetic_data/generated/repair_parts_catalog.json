@@ -1,0 +1,1044 @@
+{
+  "items": [
+    {
+      "item_id": "repair_clamp_100mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "repair_clamp_150mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "repair_clamp_200mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "repair_clamp_250mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "repair_clamp_300mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "repair_clamp_400mm",
+      "kind": "part",
+      "category": "repair_clamp",
+      "name": "Stainless repair clamp (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_100mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_150mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_200mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_250mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_300mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "full_circle_clamp_400mm",
+      "kind": "part",
+      "category": "full_circle_clamp",
+      "name": "Full-circle repair clamp (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "coupling_100mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "coupling_150mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "coupling_200mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "coupling_250mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "coupling_300mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "coupling_400mm",
+      "kind": "part",
+      "category": "coupling",
+      "name": "Restrained coupling (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "gate_valve_100mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "gate_valve_150mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "gate_valve_200mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "gate_valve_250mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "gate_valve_300mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "gate_valve_400mm",
+      "kind": "part",
+      "category": "gate_valve",
+      "name": "Resilient-seat gate valve (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "pipe_section_100mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "pipe_section_150mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "pipe_section_200mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "pipe_section_250mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "pipe_section_300mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "pipe_section_400mm",
+      "kind": "part",
+      "category": "pipe_section",
+      "name": "Replacement pipe section (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "gasket_100mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "gasket_150mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "gasket_200mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "gasket_250mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "gasket_300mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "gasket_400mm",
+      "kind": "part",
+      "category": "gasket",
+      "name": "Watermain gasket kit (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_100mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_150mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_200mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_250mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_300mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "bolt_kit_400mm",
+      "kind": "part",
+      "category": "bolt_kit",
+      "name": "Stainless bolt kit (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_100mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_150mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_200mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_250mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_300mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "restraint_fitting_400mm",
+      "kind": "part",
+      "category": "restraint_fitting",
+      "name": "Mechanical restraint fitting (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "bedding_material_100mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "bedding_material_150mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "bedding_material_200mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "bedding_material_250mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "bedding_material_300mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "bedding_material_400mm",
+      "kind": "part",
+      "category": "bedding_material",
+      "name": "Granular bedding material (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "m",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_100mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (100 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 100,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 100 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_150mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (150 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 150,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 150 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_200mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (200 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 200,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 200 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_250mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (250 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 250,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 250 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_300mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (300 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 300,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 300 mm mains."
+    },
+    {
+      "item_id": "mechanical_fitting_400mm",
+      "kind": "part",
+      "category": "mechanical_fitting",
+      "name": "Mechanical repair fitting (400 mm)",
+      "material_compatibility": [
+        "Cast Iron",
+        "Ductile Iron",
+        "PVC",
+        "Concrete",
+        "Asbestos Cement"
+      ],
+      "diameter_mm": 400,
+      "unit": "each",
+      "spec": "Synthetic Toronto watermain repair item sized for 400 mm mains."
+    },
+    {
+      "item_id": "road_restoration",
+      "kind": "service",
+      "category": "road_restoration",
+      "name": "Road cut restoration",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "lot",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "traffic_control",
+      "kind": "service",
+      "category": "traffic_control",
+      "name": "Traffic control setup",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "day",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "dewatering",
+      "kind": "service",
+      "category": "dewatering",
+      "name": "Dewatering and pumping",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "day",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "utility_locate",
+      "kind": "service",
+      "category": "utility_locate",
+      "name": "Emergency utility locates",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "lot",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "environmental_cleanup",
+      "kind": "service",
+      "category": "environmental_cleanup",
+      "name": "Environmental cleanup response",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "lot",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "excavation_equipment",
+      "kind": "service",
+      "category": "excavation_equipment",
+      "name": "Excavation equipment rental",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "day",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "mechanical_repair_service",
+      "kind": "service",
+      "category": "mechanical_repair_service",
+      "name": "Mechanical repair service crew",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "day",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    },
+    {
+      "item_id": "electrical_service",
+      "kind": "service",
+      "category": "electrical_service",
+      "name": "Electrical service support",
+      "material_compatibility": [],
+      "diameter_mm": null,
+      "unit": "lot",
+      "spec": "Synthetic blast-radius service estimate seeded from Toronto contract suppliers."
+    }
+  ]
+}

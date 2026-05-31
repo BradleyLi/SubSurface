@@ -178,6 +178,7 @@ def api_get_analysis_run_file(run_id: str, filename: str) -> dict:
         "operations.md",
         "final_summary.md",
         "action_plan.json",
+        "bill_of_materials.json",
         "manifest.json",
     }
     if filename not in allowed:

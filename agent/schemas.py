@@ -107,6 +107,80 @@ class PerRoleCallerContext(BaseModel):
     synthesis: str = ""
 
 
+class CatalogItem(BaseModel):
+    item_id: str
+    kind: Literal["part", "service"]
+    category: str
+    name: str
+    material_compatibility: list[str] = Field(default_factory=list)
+    diameter_mm: int | None = None
+    unit: Literal["each", "m", "day", "lot"]
+    spec: str
+
+
+class Supplier(BaseModel):
+    supplier_id: str
+    name: str
+    supplier_type: str
+    source: str = "toronto_non_competitive_contracts"
+    real_contract_max: float | None = None
+    wards_served: list[str] = Field(default_factory=list)
+    contact: str | None = None
+
+
+class SupplierPartOffer(BaseModel):
+    supplier_id: str
+    item_id: str
+    unit_price: float
+    currency: str = "CAD"
+    min_order_qty: float = 1.0
+    lead_time_days: int = 1
+    in_stock: bool = True
+
+
+class BomLineItem(BaseModel):
+    line_id: str
+    item_id: str
+    kind: Literal["part", "service"]
+    category: str
+    description: str
+    qty: float
+    unit: str
+    chosen_supplier_id: str | None = None
+    chosen_supplier_name: str | None = None
+    unit_price: float | None = None
+    line_total: float = 0.0
+    alternatives: list[dict[str, Any]] = Field(default_factory=list)
+    reason: str | None = None
+
+
+class ContractAwardRecommendation(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    supplier_type: str
+    scope: str
+    line_item_ids: list[str] = Field(default_factory=list)
+    award_subtotal: float
+    rationale: str
+    requires_human_approval: bool = True
+
+
+class BillOfMaterials(BaseModel):
+    pipe_id: str
+    run_id: str
+    line_items: list[BomLineItem] = Field(default_factory=list)
+    contract_awards: list[ContractAwardRecommendation] = Field(default_factory=list)
+    parts_subtotal: float = 0.0
+    services_subtotal: float = 0.0
+    subtotal: float = 0.0
+    contingency_pct: float = 0.15
+    tax_pct: float = 0.13
+    total_estimate: float = 0.0
+    currency: str = "CAD"
+    notes: list[str] = Field(default_factory=list)
+    missing_data: list[str] = Field(default_factory=list)
+
+
 class AnalysisPacket(BaseModel):
     run_id: str
     analysis_scope: AnalysisScope
@@ -147,6 +221,7 @@ class AnalysisRunResponse(BaseModel):
     roles: list[RoleReport]
     final_markdown: str
     action_plan: ActionPlan
+    bill_of_materials: BillOfMaterials | None = None
     source: Literal["nemotron", "template", "partial"]
     models: dict[str, str] = Field(default_factory=dict)
     created_at: str
