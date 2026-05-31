@@ -20,9 +20,9 @@ from app_styles import inject_css, section_title, risk_badge
 from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from api_client import get_pipes_api, post_analysis_run_api
 from frontend.nav import w2_session_key
-from data_utils import get_shap, RISK_COLORS, MATERIAL_RISK
+from data_utils import RISK_COLORS
 from model import failure_summary
-from frontend.nav import render_top_nav
+from frontend.nav import render_top_nav, reconcile_multiselect_filter
 from frontend.order_report_ui import render_order_report_panel
 from frontend.report import (
     MAX_NEMOTRON_PIPES,
@@ -47,6 +47,13 @@ for _k, _v in [
 # ── Top nav + data ─────────────────────────────────────────────────────────
 use_real = render_top_nav("overview")
 df = get_pipes_api(use_real=use_real)
+
+ml_snapshot_year = None
+if use_real and "prediction_date" in df.columns and df["prediction_date"].notna().any():
+    ml_snapshot_year = str(df["prediction_date"].iloc[0])[:4]
+_snapshot_suffix = (
+    f" · {ml_snapshot_year} ML snapshot" if ml_snapshot_year else ""
+)
 
 pipe_types_available = sorted(df["pipe_type"].unique()) if "pipe_type" in df.columns else []
 has_layers = len(pipe_types_available) > 1
@@ -79,7 +86,8 @@ st.markdown(
     '<div class="section-flow-header">'
     '<span class="section-flow-num">01</span>'
     '<span class="section-flow-title">Risk Map</span>'
-    '<span class="section-flow-sub"> · Pipe segments coloured by predicted 12-month break probability</span>'
+    '<span class="section-flow-sub"> · Pipe segments coloured by predicted 12-month break probability'
+    f'{_snapshot_suffix}</span>'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -96,6 +104,12 @@ with filter_col:
     st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
     section_title("Map Filters")
 
+    _mat_options = sorted(df["material"].unique())
+    reconcile_multiselect_filter("map_mat_filter", _mat_options)
+    _ward_options = sorted(df["ward"].unique())
+    reconcile_multiselect_filter("map_ward_filter", _ward_options)
+    reconcile_multiselect_filter("map_risk_filter", ["Critical", "High", "Medium", "Low"])
+
     risk_filter = st.multiselect(
         "Risk Level",
         options=["Critical", "High", "Medium", "Low"],
@@ -104,14 +118,14 @@ with filter_col:
     )
     mat_filter = st.multiselect(
         "Material",
-        options=sorted(df["material"].unique()),
-        default=sorted(df["material"].unique()),
+        options=_mat_options,
+        default=_mat_options,
         key="map_mat_filter",
     )
     ward_filter_map = st.multiselect(
         "Ward",
-        options=sorted(df["ward"].unique()),
-        default=sorted(df["ward"].unique()),
+        options=_ward_options,
+        default=_ward_options,
         key="map_ward_filter",
     )
     min_risk = st.slider("Min Risk Score", 0, 100, 0, key="map_min_risk")
@@ -261,6 +275,28 @@ with map_col:
             hoverinfo="none",
             showlegend=True,
         ))
+        # Visible markers on top so hover works on checked pipes (lines above use hoverinfo=none).
+        fig.add_trace(go.Scattermap(
+            lat=selected_on_map["lat"],
+            lon=selected_on_map["lon"],
+            mode="markers",
+            marker=dict(size=14, color="#ff4fd8", opacity=0.92),
+            text=selected_on_map["pipe_id"],
+            customdata=selected_on_map[[
+                "risk_score", "material", "age", "ward",
+                "risk_level", "diameter_mm", "emergency_cost", "pipe_type",
+            ]].values,
+            hovertemplate=(
+                "<b>%{text}</b> (checked)<br>"
+                "Risk Score: <b>%{customdata[0]:.1f}%</b> · %{customdata[4]}<br>"
+                "Material: %{customdata[1]} · Age: %{customdata[2]} yrs<br>"
+                "Ward: %{customdata[3]} · Type: %{customdata[7]}<br>"
+                "Diameter: %{customdata[5]} mm<br>"
+                "Emergency Cost: $%{customdata[6]:,}<extra></extra>"
+            ),
+            name="",
+            showlegend=False,
+        ))
 
     if _app_voice_match is not None and _app_voice_match.lat is not None:
         fig.add_trace(go.Scattermap(
@@ -304,6 +340,55 @@ with map_col:
     s2.metric("Critical",       int((fdf["risk_level"] == "Critical").sum()))
     s3.metric("High",           int((fdf["risk_level"] == "High").sum()))
     s4.metric("Avg Risk",       f"{fdf['risk_score'].mean():.1f}" if len(fdf) else "—")
+
+    checked_ids = st.session_state.get("selected_pipe_ids", [])
+    if checked_ids:
+        checked_rows = df[df["pipe_id"].isin(checked_ids)].sort_values(
+            "risk_score", ascending=False
+        )
+        on_map_ids = set(fdf["pipe_id"]) if not fdf.empty else set()
+        hidden_n = sum(1 for pid in checked_ids if pid not in on_map_ids)
+        section_title(f"Checked Pipes ({len(checked_ids)})")
+        if hidden_n:
+            st.caption(
+                f"{hidden_n} checked pipe(s) are hidden by map filters — "
+                "widen Risk Level / Ward filters above to see them on the map."
+            )
+        for _, r in checked_rows.head(6).iterrows():
+            lvl = str(r["risk_level"])
+            color = RISK_COLORS.get(lvl, "#888")
+            on_map = r["pipe_id"] in on_map_ids
+            st.markdown(
+                f"""
+                <div class="alert-row" style="border-left-color:{color};margin-bottom:.35rem">
+                    <span class="alert-icon">{
+                        "🔴" if lvl == "Critical" else
+                        "🟠" if lvl == "High" else
+                        "🟡" if lvl == "Medium" else "🟢"
+                    }</span>
+                    <div style="flex:1">
+                        <div class="alert-text">
+                            <strong>{r['pipe_id']}</strong>
+                            &nbsp;{risk_badge(lvl)}&nbsp;
+                            <span style="font-family:'IBM Plex Mono',monospace;color:#1de9b6">
+                                {r['risk_score']:.1f}% risk
+                            </span>
+                            {"&nbsp;<span style='color:#5a7a9a;font-size:.72rem'>· on map</span>"
+                             if on_map else
+                             "&nbsp;<span style='color:#ffa726;font-size:.72rem'>· filtered off map</span>"}
+                        </div>
+                        <div class="alert-meta">
+                            {r['ward']} · {r['material']} · {int(r['age'])} yrs ·
+                            {int(r['diameter_mm'])} mm · {r.get('pipe_type', '—')}
+                        </div>
+                        <div class="alert-meta">{failure_summary(r)}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        if len(checked_rows) > 6:
+            st.caption(f"…and {len(checked_rows) - 6} more checked pipe(s) in the queue below.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -391,7 +476,7 @@ tab1, tab2, tab3 = st.tabs([
 # TAB 1 · PRIORITY QUEUE
 # ════════════════════════════════════════════════════════════════════════════
 with tab1:
-    section_title(f"Top 50 Replacement Candidates — Sorted by {sort_mode}")
+    section_title(f"Top 50 Replacement Candidates — Sorted by {sort_mode}{_snapshot_suffix}")
 
     # Quick-select buttons
     qs0, qs1, qs2, qs3, _ = st.columns([1.1, 1.1, 1.1, 1.0, 4])
@@ -434,18 +519,54 @@ with tab1:
 
     init_selected = queue_df["pipe_id"].isin(st.session_state.selected_pipe_ids)
 
-    display_df = pd.DataFrame({
-        "Select":       init_selected.values,
-        "Pipe ID":      queue_df["pipe_id"].values,
-        "Risk Level":   queue_df["risk_level"].astype(str).values,
-        "Risk %":       queue_df["risk_score"].values,
-        "Ward":         queue_df["ward"].values,
-        "Material":     queue_df["material"].values,
-        "Age (yr)":     queue_df["age"].values,
-        "Replace $":    queue_df["replacement_cost"].values,
-        "Savings $":    queue_df["expected_savings"].values,
-        "In Budget":    queue_df["in_budget"].values,
+    has_ml_risk = (
+        "predicted_break_probability" in queue_df.columns
+        and queue_df["predicted_break_probability"].notna().any()
+    )
+
+    display_cols: dict[str, object] = {
+        "Select":     init_selected.values,
+        "Pipe ID":    queue_df["pipe_id"].values,
+        "Risk Level": queue_df["risk_level"].astype(str).values,
+    }
+    if has_ml_risk:
+        display_cols["Break Prob %"] = (
+            queue_df["predicted_break_probability"] * 100
+        ).round(1).values
+        display_cols["Percentile"] = queue_df["risk_percentile"].round(1).values
+    else:
+        display_cols["Risk %"] = queue_df["risk_score"].values
+    display_cols.update({
+        "Ward":      queue_df["ward"].values,
+        "Material":  queue_df["material"].values,
+        "Age (yr)":  queue_df["age"].values,
+        "Replace $": queue_df["replacement_cost"].values,
+        "Savings $": queue_df["expected_savings"].values,
+        "In Budget": queue_df["in_budget"].values,
     })
+    display_df = pd.DataFrame(display_cols)
+
+    risk_column_config: dict[str, st.column_config.Column] = {}
+    disabled_risk_cols: list[str] = []
+    if has_ml_risk:
+        risk_column_config = {
+            "Break Prob %": st.column_config.ProgressColumn(
+                "Break Prob %", min_value=0, max_value=100, format="%.1f",
+                help="12-month predicted break probability from the XGBoost model",
+            ),
+            "Percentile": st.column_config.ProgressColumn(
+                "Percentile", min_value=0, max_value=100, format="%.1f",
+                help="Network-wide risk percentile (used for risk level bands)",
+            ),
+        }
+        disabled_risk_cols = ["Break Prob %", "Percentile"]
+    else:
+        risk_column_config = {
+            "Risk %": st.column_config.ProgressColumn(
+                "Risk %", min_value=0, max_value=100, format="%.1f",
+            ),
+        }
+        disabled_risk_cols = ["Risk %"]
 
     if _app_voice_match is not None:
         st.markdown(
@@ -502,13 +623,13 @@ with tab1:
             hide_index=True,
             column_config={
                 "Select":     st.column_config.CheckboxColumn("✓", width="small"),
-                "Risk %":     st.column_config.ProgressColumn("Risk %", min_value=0, max_value=100, format="%.1f"),
+                **risk_column_config,
                 "Replace $":  st.column_config.NumberColumn("Replace $",  format="$%d"),
                 "Savings $":  st.column_config.NumberColumn("Savings $",  format="$%d"),
                 "In Budget":  st.column_config.CheckboxColumn("Budget", width="small"),
             },
             disabled=[
-                "Pipe ID", "Risk Level", "Risk %", "Ward", "Material",
+                "Pipe ID", "Risk Level", *disabled_risk_cols, "Ward", "Material",
                 "Age (yr)", "Replace $", "Savings $", "In Budget",
             ],
             height=440,

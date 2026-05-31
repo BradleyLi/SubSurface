@@ -5,8 +5,6 @@ Human-readable, agent-style explanations for pipe failure risk.
 
 from __future__ import annotations
 
-from model import MATERIAL_LIFE
-
 
 def agent_failure_explanation(row) -> str:
     """Return an agent-style human-readable explanation for one pipe."""
@@ -18,35 +16,28 @@ def agent_failure_explanation(row) -> str:
     risk_level = str(row.get("risk_level", "Unknown"))
 
     drivers: list[str] = []
-    life = MATERIAL_LIFE.get(material, 60)
-    if age > life:
-        drivers.append(f"it is {age} years old, beyond typical {material} service life ({life} years)")
-    elif age > int(life * 0.75):
-        drivers.append(f"it is {age} years old and approaching end-of-life for {material}")
+    if row.get("predicted_break_probability") is not None and str(row.get("predicted_break_probability")) != "nan":
+        drivers.append(
+            f"the XGBoost model estimates a {risk_score:.1f}% annual break probability "
+            f"(network percentile {float(row.get('risk_percentile', 0)):.0f})"
+        )
     else:
-        drivers.append(f"it has a moderate age profile ({age} years)")
+        drivers.append(f"its overall risk score is {risk_score:.1f}/100")
 
-    trees = int(row.get("tree_count_5m", 0))
-    if trees >= 4:
-        drivers.append(f"{trees} nearby trees increase the chance of root-related stress")
-
-    complaints = int(row.get("complaints_12mo", 0))
-    if complaints >= 3:
-        drivers.append(f"{complaints} recent service complaints indicate active local distress")
-
-    breaks = int(row.get("break_count_10yr", 0))
+    breaks = int(row.get("break_count_10yr", 0) or 0)
     if breaks >= 2:
         drivers.append(f"historical break activity ({breaks} in 10 years) raises recurrence risk")
+    elif breaks == 1:
+        drivers.append("one prior break is on record for this segment")
 
-    resurfacing = int(row.get("years_since_resurfacing", 0))
-    if resurfacing >= 18:
-        drivers.append(f"{resurfacing} years since resurfacing suggests prolonged surface load stress")
+    if age >= 80:
+        drivers.append(f"the segment is {age} years old ({material})")
 
     emergency_cost = int(row.get("emergency_cost", 0))
     replacement_cost = int(row.get("replacement_cost", 0))
     savings = int(row.get("expected_savings", 0))
 
-    primary_driver = drivers[0] if drivers else "its overall risk profile remains elevated"
+    primary_driver = drivers[0] if drivers else "model output indicates elevated failure risk"
     secondary = ""
     if len(drivers) > 1:
         secondary = " Secondary factors: " + "; ".join(drivers[1:3]) + "."

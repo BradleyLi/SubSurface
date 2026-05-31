@@ -230,6 +230,6 @@ class AnalysisRunResponse(BaseModel):
 
 class AnalysisRunRequest(BaseModel):
     pipe_id: str
-    use_real: bool = False
+    use_real: bool = True
     use_latest_voice_transcript: bool = True
     transcript_path: str | None = None

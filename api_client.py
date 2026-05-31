@@ -52,7 +52,7 @@ def _records_to_df(records: list[dict]) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def get_pipes_api(use_real: bool = False) -> pd.DataFrame:
+def get_pipes_api(use_real: bool = True) -> pd.DataFrame:
     try:
         data = _request_json("/api/pipes", query={"use_real": str(use_real).lower()})
         return _records_to_df(data["records"])
@@ -104,7 +104,7 @@ def get_workflow2_health_api() -> dict:
 
 def post_analysis_run_api(
     pipe_id: str,
-    use_real: bool = False,
+    use_real: bool = True,
     *,
     use_latest_voice_transcript: bool = True,
     transcript_path: str | None = None,
@@ -144,7 +144,7 @@ def get_analysis_run_api(run_id: str) -> dict:
     )
 
 
-def get_risk_summary_api(pipe_id: str, use_real: bool = False) -> dict:
+def get_risk_summary_api(pipe_id: str, use_real: bool = True) -> dict:
     """Workflow 1 Nemotron risk summary for one pipe."""
     try:
         return _request_json(
@@ -163,7 +163,7 @@ def get_risk_summary_api(pipe_id: str, use_real: bool = False) -> dict:
 
 def get_ai_response_api(
     query: str,
-    use_real: bool = False,
+    use_real: bool = True,
     focus_ward: str | None = None,
     focus_material: str | None = None,
 ) -> str:

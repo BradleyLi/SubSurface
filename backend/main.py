@@ -79,7 +79,7 @@ async def health_workflow2() -> dict:
 
 
 @app.get("/api/pipes")
-def api_pipes(use_real: bool = False) -> dict:
+def api_pipes(use_real: bool = True) -> dict:
     try:
         df = get_pipes(use_real=use_real)
     except Exception as exc:
@@ -87,7 +87,7 @@ def api_pipes(use_real: bool = False) -> dict:
     return {
         "count": int(len(df)),
         "records": _to_records(df),
-        "source": "real" if use_real else "synthetic",
+        "source": _pipe_data_source(df, use_real),
     }
 
 
@@ -99,7 +99,7 @@ def api_watermains_layer(
 ) -> dict:
     try:
         if not use_real or layer_mode == "Synthetic":
-            df = get_pipes(use_real=False)
+            df = get_pipes(use_real=True)
             df = df[df["pipe_type"] == "Synthetic"].copy()
             source = "synthetic"
         elif layer_mode == "Distribution":
@@ -121,13 +121,25 @@ def api_watermains_layer(
 
 class AIRequest(BaseModel):
     query: str
-    use_real: bool = False
+    use_real: bool = True
     focus_ward: str | None = None
     focus_material: str | None = None
 
 
+def _pipe_data_source(df: pd.DataFrame, use_real: bool) -> str:
+    if not use_real:
+        return "synthetic"
+    if "data_source" in df.columns and len(df):
+        value = df["data_source"].iloc[0]
+        if value == "ml_enriched":
+            return "ml_enriched"
+    if "predicted_break_probability" in df.columns and df["predicted_break_probability"].notna().any():
+        return "ml_enriched"
+    return "real"
+
+
 @app.get("/api/pipes/{pipe_id}/risk-summary")
-def api_pipe_risk_summary(pipe_id: str, use_real: bool = False) -> dict:
+def api_pipe_risk_summary(pipe_id: str, use_real: bool = True) -> dict:
     """Workflow 1: Nemotron JSON risk summary for a single pipe."""
     try:
         result = workflow1_summary(pipe_id, use_real=use_real)

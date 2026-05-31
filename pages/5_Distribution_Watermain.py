@@ -30,15 +30,7 @@ if "use_real_dist_data" not in st.session_state:
     st.session_state.use_real_dist_data = True
 render_top_nav("watermains", use_real_key="use_real_dist_data")
 
-# ── Material colour palette ────────────────────────────────────────────────────
-MAT_COLORS: dict[str, str] = {
-    "Cast Iron":        "#ff7043",
-    "Asbestos Cement":  "#ab47bc",
-    "Concrete":         "#78909c",
-    "Ductile Iron":     "#26c6da",
-    "PVC":              "#66bb6a",
-}
-DEFAULT_MAT_COLOR = "#90a4ae"
+from materials import MAT_COLOR_FALLBACK, material_color
 TYPE_COLORS: dict[str, str] = {
     "Transmission": "#1de9b6",
     "Distribution": "#4fc3f7",
@@ -188,7 +180,7 @@ fig = go.Figure()
 if color_by == "Material":
     groups = dff.groupby("material")
     for mat, grp in groups:
-        color = MAT_COLORS.get(mat, DEFAULT_MAT_COLOR)
+        color = material_color(mat)
         lats, lons = [], []
         for _, row in grp.iterrows():
             lats += [row["lat0"], row["lat1"], None]
@@ -206,7 +198,7 @@ elif color_by == "Pipe Type":
         grp = dff[dff["pipe_type"] == ptype]
         if grp.empty:
             continue
-        color = TYPE_COLORS.get(ptype, DEFAULT_MAT_COLOR)
+        color = TYPE_COLORS.get(ptype, MAT_COLOR_FALLBACK)
         width = 2.0 if ptype == "Distribution" else 3.0
         lats, lons = [], []
         for _, row in grp.iterrows():

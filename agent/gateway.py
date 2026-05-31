@@ -16,6 +16,7 @@ from agent.schemas import PipeRiskEvidence, RiskSummaryResponse, Workflow1Summar
 from agent.template_summary import template_summary
 from agent.w1_prompts import build_json_repair_messages, build_json_summary_messages
 from data_utils import get_pipes
+from ml_predictions import find_pipe_row
 
 PROMPT_VERSION = "workflow1-v1"
 
@@ -23,7 +24,7 @@ PROMPT_VERSION = "workflow1-v1"
 def workflow1_summary(
     pipe_id: str,
     *,
-    use_real: bool = False,
+    use_real: bool = True,
     df: pd.DataFrame | None = None,
 ) -> RiskSummaryResponse:
     """
@@ -32,11 +33,10 @@ def workflow1_summary(
     if df is None:
         df = get_pipes(use_real=use_real)
 
-    matches = df[df["pipe_id"] == pipe_id]
-    if matches.empty:
+    row = find_pipe_row(df, pipe_id)
+    if row is None:
         raise KeyError(f"Pipe not found: {pipe_id}")
 
-    row = matches.iloc[0]
     evidence = build_evidence_from_row(row, df=df)
     endpoint = get_endpoint(WorkflowProfile.WORKFLOW1)
 

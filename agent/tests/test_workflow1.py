@@ -13,11 +13,11 @@ from agent.harness.endpoints import WorkflowProfile, get_endpoint
 from agent.json_utils import extract_json_object, parse_json_object
 from agent.template_summary import template_summary
 from agent.w1_prompts import build_json_summary_messages
-from data_utils import get_pipes
+from agent.tests.conftest import synthetic_ml_df
 
 
 def test_evidence_builder_required_fields():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     row = df.iloc[0]
     ev = build_evidence_from_row(row, df=df)
     assert ev.pipe_id == row["pipe_id"]
@@ -26,7 +26,7 @@ def test_evidence_builder_required_fields():
 
 
 def test_evidence_to_w1_tables():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     ev = build_evidence_from_row(df.iloc[0], df=df)
     tables = evidence_to_w1_tables(ev)
     assert "pipe_profile" in tables
@@ -36,7 +36,7 @@ def test_evidence_to_w1_tables():
 
 
 def test_build_json_summary_messages():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     ev = build_evidence_from_row(df.iloc[0], df=df)
     messages = build_json_summary_messages(ev)
     assert messages[0]["role"] == "system"
@@ -50,7 +50,7 @@ def test_w1_endpoint_uses_settings():
 
 
 def test_template_summary_matches_probability():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     row = df.nlargest(1, "risk_score").iloc[0]
     ev = build_evidence_from_row(row, df=df)
     summary = template_summary(ev)
@@ -66,7 +66,7 @@ def test_parse_json_from_fenced_block():
 
 
 def test_workflow1_summary_uses_mock_nemotron():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     pipe_id = str(df.iloc[0]["pipe_id"])
     mock_json = json.dumps(
         {
@@ -87,7 +87,7 @@ def test_workflow1_summary_uses_mock_nemotron():
 
 
 def test_workflow1_summary_fallback_on_bad_llm():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     pipe_id = str(df.iloc[0]["pipe_id"])
 
     with patch("agent.gateway.chat_completion_messages", return_value="not json at all"):

@@ -218,7 +218,7 @@ async def _call_synthesis(
 async def workflow2_run(
     pipe_id: str,
     *,
-    use_real: bool = False,
+    use_real: bool = True,
     df: pd.DataFrame | None = None,
     caller_report: CallerReport | None = None,
     use_latest_voice_transcript: bool = True,
@@ -322,7 +322,7 @@ async def workflow2_run(
 def workflow2_run_sync(
     pipe_id: str,
     *,
-    use_real: bool = False,
+    use_real: bool = True,
     df: pd.DataFrame | None = None,
     caller_report: CallerReport | None = None,
     use_latest_voice_transcript: bool = True,

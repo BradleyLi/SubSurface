@@ -154,7 +154,7 @@ with chat_col:
             time.sleep(0.9)
             ai_reply = get_ai_response_api(
                 query=last_query,
-                use_real=st.session_state.get("use_real_data", False),
+                use_real=st.session_state.get("use_real_data", True),
                 focus_ward=focus_ward,
                 focus_material=focus_material,
             )

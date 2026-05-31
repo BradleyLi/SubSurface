@@ -33,35 +33,7 @@ DATASET_ID = "watermains"
 # Set to None to load all ~60 000 Distribution features (30–60 s first load).
 MAX_DIST_FEATURES = 3_000
 
-MATERIAL_MAP: dict[str, str] = {
-    "CI":    "Cast Iron",
-    "CIS":   "Cast Iron",
-    "CIST":  "Cast Iron",
-    "DI":    "Ductile Iron",
-    "DIP":   "Ductile Iron",
-    "DIPL":  "Ductile Iron",
-    "PVC":   "PVC",
-    "PVCP":  "PVC",
-    "PE":    "PVC",
-    "CPP":   "PVC",
-    "GRP":   "PVC",
-    "AC":    "Asbestos Cement",
-    "ACP":   "Asbestos Cement",
-    "CONC":  "Concrete",
-    "CONCP": "Concrete",
-    "STEEL": "Ductile Iron",
-    "STL":   "Ductile Iron",
-    "UNKN":  "Cast Iron",
-    "UNK":   "Cast Iron",
-}
-
-MATERIAL_RISK: dict[str, float] = {
-    "Cast Iron":        0.90,
-    "Asbestos Cement":  0.82,
-    "Concrete":         0.52,
-    "Ductile Iron":     0.28,
-    "PVC":              0.08,
-}
+from materials import normalize_material_code
 
 RISK_COLORS: dict[str, str] = {
     "Critical": "#ff3d3d",
@@ -205,8 +177,7 @@ def _parse_features(features: list[dict], pipe_type: str) -> list[dict]:
         if not (43.5 < lat0 < 44.1 and -80.0 < lon0 < -79.0):
             continue
 
-        raw_mat  = str(props.get("Watermain Material") or "CI").upper().strip()
-        material = MATERIAL_MAP.get(raw_mat, "Cast Iron")
+        material = normalize_material_code(props.get("Watermain Material"))
 
         raw_yr = props.get("Watermain Construction Year")
         try:
@@ -251,66 +222,28 @@ def _parse_features(features: list[dict], pipe_type: str) -> list[dict]:
     return rows
 
 
-# ── Risk scoring ──────────────────────────────────────────────────────────────
+# ── Schema placeholders (risk filled by ML enrichment only) ───────────────────
 
-def _add_risk_scores(df: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
-    """Apply the same risk formula used by the synthetic pipeline."""
+def _add_supplemental_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Add canonical columns for join/UI; do not compute heuristic risk scores."""
     df = df.copy()
     df["age"] = 2026 - df["install_year"]
-
-    m_risk = df["material"].map(MATERIAL_RISK).fillna(0.5)
-    age_n  = (df["age"] / 106).clip(0, 1)
-
-    # Features absent from the real dataset — inject calibrated noise so
-    # the risk surface is geographically varied rather than flat.
-    noise_tree = rng.uniform(0, 0.20, len(df))
-    noise_comp = rng.uniform(0, 0.15, len(df))
-    noise_lead = rng.uniform(0, 0.12, len(df))
-    noise_surf = rng.uniform(0, 0.10, len(df))
-
-    raw = (
-        0.35 * age_n        +
-        0.30 * m_risk       +
-        0.13 * noise_tree   +
-        0.10 * noise_comp   +
-        0.07 * noise_lead   +
-        0.05 * noise_surf
-    )
-    raw = (raw + rng.normal(0, 0.035, len(df))).clip(0.04, 0.97)
-
-    df["risk_score"] = (raw * 100).round(1)
-    df["risk_level"] = pd.cut(
-        df["risk_score"],
-        bins=[0, 25, 50, 75, 100],
-        labels=["Low", "Medium", "High", "Critical"],
-    )
-    df["risk_color"] = df["risk_level"].map(RISK_COLORS)
-
-    # Synthetic supplemental fields (mirrors the synthetic schema exactly)
-    df["tree_count_5m"]           = rng.poisson(2.4, len(df))
-    df["complaints_12mo"]         = rng.poisson(1.9, len(df))
-    df["utility_cuts_18mo"]       = np.minimum(rng.poisson(0.7, len(df)), 7)
-    df["lead_exceedance_pct"]     = np.abs(rng.normal(3.2, 4.0, len(df)))
-    df["years_since_resurfacing"] = rng.integers(0, 44, len(df))
-    df["break_count_10yr"]        = np.minimum(rng.poisson(1.1, len(df)), 8)
-
-    df["properties_affected"] = (df["length_m"] * rng.uniform(0.5, 3.5, len(df))).astype(int)
-    df["schools_affected"]    = np.minimum((df["properties_affected"] / 380).astype(int), 5)
-    df["hospitals_affected"]  = np.minimum((df["properties_affected"] / 2200).astype(int), 2)
-
-    df["emergency_cost"]   = (
-        df["diameter_mm"] * df["length_m"] * df["risk_score"] / 45
-        * rng.uniform(0.8, 1.2, len(df))
-    ).astype(int)
-    df["replacement_cost"] = (
-        df["diameter_mm"] * df["length_m"] * 1.3
-        * rng.uniform(0.9, 1.1, len(df))
-    ).astype(int)
-    df["expected_savings"] = (df["emergency_cost"] - df["replacement_cost"]).clip(lower=0)
-    df["priority_rank"]    = (
-        df["expected_savings"].rank(ascending=False, method="first").astype(int)
-    )
-
+    df["tree_count_5m"] = 0
+    df["complaints_12mo"] = 0
+    df["utility_cuts_18mo"] = 0
+    df["lead_exceedance_pct"] = 0.0
+    df["years_since_resurfacing"] = 0
+    df["break_count_10yr"] = 0
+    df["properties_affected"] = (df["length_m"] * 0.5).astype(int)
+    df["schools_affected"] = 0
+    df["hospitals_affected"] = 0
+    df["risk_score"] = np.nan
+    df["risk_level"] = pd.NA
+    df["risk_color"] = pd.NA
+    df["emergency_cost"] = 0
+    df["replacement_cost"] = (df["diameter_mm"] * df["length_m"] * 1.3).astype(int)
+    df["expected_savings"] = 0
+    df["priority_rank"] = 0
     return df
 
 
@@ -323,8 +256,8 @@ def _add_risk_scores(df: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame
 def get_real_pipes(max_dist: int = MAX_DIST_FEATURES) -> pd.DataFrame:
     """
     Fetch Transmission Watermain + Distribution Watermain GeoJSON datasets
-    from Open Data Toronto (CKAN), apply risk scoring, and return a DataFrame
-    matching the schema of data_utils.get_pipes().
+    from Open Data Toronto (CKAN) and return a DataFrame with geometry and
+    attributes. Risk fields are placeholders until ML enrichment.
 
     Uses the standard CKAN API pattern recommended by Toronto Open Data:
       1. package_show  → discover all resources in the "watermains" package
@@ -368,9 +301,4 @@ def get_real_pipes(max_dist: int = MAX_DIST_FEATURES) -> pd.DataFrame:
         )
 
     df = pd.DataFrame(rows)
-
-    # Step 5 — Risk scoring with a fixed seed for reproducibility
-    seed = int(df["install_year"].mean()) if len(df) else 42
-    df   = _add_risk_scores(df, rng=np.random.default_rng(seed))
-
-    return df
+    return _add_supplemental_columns(df)

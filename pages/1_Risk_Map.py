@@ -396,61 +396,67 @@ with detail_col:
         )
 
         # ── SHAP / Risk Drivers ───────────────────────────────────────────────
-        if use_real and pipe_type_val in ("Transmission", "Distribution"):
-            # Real data: only material + age are actual signals.
-            # Show a simplified chart and label everything clearly.
+        ml_shap_raw = row.get("ml_top_shap_contributors")
+        if use_real and isinstance(ml_shap_raw, list) and ml_shap_raw:
             st.markdown(
-                '<div class="section-title" style="margin-top:1rem">Risk Drivers'
+                '<div class="section-title" style="margin-top:1rem">SHAP — Model Risk Drivers'
                 ' <span style="font-size:.65rem;color:#3d5a78;font-weight:400">'
-                '(estimated — material &amp; age only)</span></div>',
+                '(XGBoost TreeSHAP)</span></div>',
                 unsafe_allow_html=True,
             )
-            from data_utils import MATERIAL_RISK as _MAT_RISK
-            m_contrib  = round(_MAT_RISK.get(row["material"], 0.5) * 30, 1)
-            age_contrib = round((row["age"] / 106) * 35, 1)
-            names  = [f"Material ({row['material']})", "Pipe Age"]
-            values = [m_contrib, age_contrib]
-            colors = [
-                "#ffa726" if m_contrib < 20 else "#ff3d3d",
-                "#1de9b6" if age_contrib < 12 else "#ffa726" if age_contrib < 25 else "#ff3d3d",
-            ]
+            names, values, colors = [], [], []
+            for item in ml_shap_raw[:5]:
+                names.append(str(item.get("feature", "unknown")).replace("_", " "))
+                val = float(item.get("shap_contribution", 0.0))
+                values.append(abs(val))
+                colors.append(
+                    "#ff3d3d" if item.get("impact") == "increase_risk" else "#1de9b6"
+                )
+        elif use_real:
+            st.markdown(
+                '<div class="section-title" style="margin-top:1rem">SHAP — Model Risk Drivers</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption("No ML SHAP contributors on this pipe row.")
+            names, values, colors = [], [], []
         else:
-            # Synthetic data: full SHAP breakdown
             st.markdown(
                 '<div class="section-title" style="margin-top:1rem">SHAP — Risk Drivers</div>',
                 unsafe_allow_html=True,
             )
-            shap       = get_shap(row)
+            shap = get_shap(row)
             shap_sorted = sorted(shap.items(), key=lambda x: x[1])
-            names  = [s[0] for s in shap_sorted]
+            names = [s[0] for s in shap_sorted]
             values = [s[1] for s in shap_sorted]
             colors = ["#1de9b6" if v < 5 else "#ffa726" if v < 12 else "#ff3d3d" for v in values]
 
-        fig_shap = go.Figure(go.Bar(
-            y=names, x=values,
-            orientation="h",
-            marker=dict(color=colors, line=dict(width=0)),
-            text=[f"+{v:.1f}" for v in values],
-            textposition="outside",
-            textfont=dict(family="IBM Plex Mono", size=9, color="#8faabf"),
-            hovertemplate="<b>%{y}</b><br>Contribution: +%{x:.1f}<extra></extra>",
-        ))
-        fig_shap.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=35, t=5, b=5),
-            height=220 if not use_real else 100,
-            xaxis=dict(
-                tickfont=dict(color="#5a7a9a", size=9),
-                gridcolor="#162033",
-                title=dict(text="Risk contribution", font=dict(color="#3d5a78", size=9)),
-            ),
-            yaxis=dict(
-                tickfont=dict(family="DM Sans", color="#8faabf", size=9),
-            ),
-        )
-        st.plotly_chart(fig_shap, use_container_width=True,
-                        config={"displayModeBar": False})
+        if names:
+            fig_shap = go.Figure(go.Bar(
+                y=names,
+                x=values,
+                orientation="h",
+                marker=dict(color=colors, line=dict(width=0)),
+                text=[f"{v:.3f}" for v in values],
+                textposition="outside",
+                textfont=dict(family="IBM Plex Mono", size=9, color="#8faabf"),
+                hovertemplate="<b>%{y}</b><br>|SHAP|: %{x:.4f}<extra></extra>",
+            ))
+            fig_shap.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=35, t=5, b=5),
+                height=220 if not use_real else 180,
+                xaxis=dict(
+                    tickfont=dict(color="#5a7a9a", size=9),
+                    gridcolor="#162033",
+                    title=dict(text="|SHAP contribution|", font=dict(color="#3d5a78", size=9)),
+                ),
+                yaxis=dict(
+                    tickfont=dict(family="DM Sans", color="#8faabf", size=9),
+                ),
+            )
+            st.plotly_chart(fig_shap, use_container_width=True,
+                            config={"displayModeBar": False})
 
         st.caption(
             "Workflow 1 (Nemotron summaries) runs on the Overview → "

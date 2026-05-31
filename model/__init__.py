@@ -1,3 +1,3 @@
-from .risk_profile import MATERIAL_LIFE, failure_summary
+from .risk_profile import failure_summary
 
-__all__ = ["MATERIAL_LIFE", "failure_summary"]
+__all__ = ["failure_summary"]

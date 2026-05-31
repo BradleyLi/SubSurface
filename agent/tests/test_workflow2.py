@@ -12,6 +12,7 @@ from agent.schemas import CallerReport, PerRoleCallerContext, RoleName
 from agent.w2_gateway import workflow2_run
 from agent.w2_prompts import augment_system_prompt, build_role_messages
 from agent.w2_template import template_role_report, template_synthesis
+from agent.tests.conftest import synthetic_ml_df
 from data_utils import get_pipes
 
 _ROLE_MD = "# Role\n\n## Section\n\nTemplate body.\n"
@@ -41,7 +42,7 @@ Done.
 
 @pytest.mark.asyncio
 async def test_build_analysis_packet():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     packet = build_analysis_packet(str(df.iloc[0]["pipe_id"]), df)
     assert packet.run_id
     assert len(packet.assets) == 1
@@ -50,7 +51,7 @@ async def test_build_analysis_packet():
 
 @pytest.mark.asyncio
 async def test_workflow2_run_mocked():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     pipe_id = str(df.iloc[0]["pipe_id"])
     packet = build_analysis_packet(pipe_id, df)
 
@@ -79,7 +80,7 @@ async def test_workflow2_run_mocked():
 
 @pytest.mark.asyncio
 async def test_workflow2_template_fallback():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     packet = build_analysis_packet(str(df.iloc[0]["pipe_id"]), df)
     roles = [template_role_report(packet, r) for r in RoleName]
     final_md, plan = template_synthesis(packet, roles)
@@ -89,7 +90,7 @@ async def test_workflow2_template_fallback():
 
 @pytest.mark.asyncio
 async def test_workflow2_all_template_on_failure():
-    df = get_pipes(use_real=False)
+    df = synthetic_ml_df()
     pipe_id = str(df.iloc[0]["pipe_id"])
 
     with patch(

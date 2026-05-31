@@ -4,70 +4,59 @@ Build deterministic evidence packets for Nemotron Workflow 1.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pandas as pd
 
 from agent.harness.workflow1 import TABLE_PIPE_PROFILE, TABLE_SHAP
 from agent.schemas import PipeRiskEvidence, ShapContributor
-from data_utils import get_shap
 
 
 def _risk_category(level: str) -> str:
     return str(level).upper().replace(" ", "_")
 
 
-def _percentile_for_score(risk_score: float, df: pd.DataFrame | None) -> float:
-    if df is not None and len(df) > 0 and "risk_score" in df.columns:
-        return float((df["risk_score"] <= risk_score).mean() * 100.0)
-    return float(min(max(risk_score, 0.0), 100.0))
+def _parse_ml_shap(row: pd.Series) -> list[ShapContributor] | None:
+    raw = row.get("ml_top_shap_contributors")
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if not raw:
+        return None
 
-
-def _shap_to_contributors(row: pd.Series) -> list[ShapContributor]:
-    shap = get_shap(row)
-    median = float(pd.Series(list(shap.values())).median()) if shap else 5.0
     contributors: list[ShapContributor] = []
-
-    label_map = {
-        "Pipe Age": ("pipe age", lambda r: int(r["age"])),
-        "Trees within 5m": ("trees within 5m", lambda r: int(r["tree_count_5m"])),
-        "311 Complaints (12mo)": ("311 complaints (12mo)", lambda r: int(r["complaints_12mo"])),
-        "Lead Exceedance %": ("lead exceedance %", lambda r: round(float(r["lead_exceedance_pct"]), 1)),
-        "Utility Cuts (18mo)": ("utility cuts (18mo)", lambda r: int(r["utility_cuts_18mo"])),
-        "Years Since Resurfacing": ("years since resurfacing", lambda r: int(r["years_since_resurfacing"])),
-        "Break History (10yr)": ("breaks in last 10 years", lambda r: int(r["break_count_10yr"])),
-    }
-
-    for name, value in sorted(shap.items(), key=lambda x: x[1], reverse=True):
-        impact: str = "increase_risk" if value >= median else "decrease_risk"
-        if name.startswith("Material ("):
-            material = str(row.get("material", "unknown"))
-            label = f"{material.lower()} material"
-            feat_val: Any = True
-        elif name in label_map:
-            label, getter = label_map[name]
-            feat_val = getter(row)
-        else:
-            label = name.lower()
-            feat_val = value
-
+    for item in raw[:5]:
+        feature = str(item.get("feature", "unknown")).replace("_", " ")
+        impact = item.get("impact", "increase_risk")
         contributors.append(
             ShapContributor(
-                feature_label=label,
-                feature_value=feat_val,
+                feature_label=feature,
+                feature_value=item.get("feature_value", ""),
                 impact=impact,  # type: ignore[arg-type]
-                shap_contribution=round(float(value), 2),
+                shap_contribution=round(float(item.get("shap_contribution", 0.0)), 4),
             )
         )
-
-    return contributors[:5]
+    return contributors or None
 
 
 def build_evidence_from_row(row: pd.Series, df: pd.DataFrame | None = None) -> PipeRiskEvidence:
     """Convert a pipe dataframe row into a Nemotron-safe evidence packet."""
-    risk_score = float(row["risk_score"])
-    probability = round(risk_score / 100.0, 4)
-    percentile = round(_percentile_for_score(risk_score, df), 1)
+    if pd.notna(row.get("predicted_break_probability")):
+        probability = round(float(row["predicted_break_probability"]), 4)
+        percentile = round(float(row["risk_percentile"]), 1)
+    else:
+        raise ValueError(
+            f"Pipe {row.get('pipe_id')} has no ML prediction; "
+            "heuristic risk fallback is disabled."
+        )
+
+    ml_shap = _parse_ml_shap(row)
+    if not ml_shap:
+        raise ValueError(
+            f"Pipe {row.get('pipe_id')} has no ML SHAP contributors."
+        )
 
     return PipeRiskEvidence(
         pipe_id=str(row["pipe_id"]),
@@ -85,7 +74,7 @@ def build_evidence_from_row(row: pd.Series, df: pd.DataFrame | None = None) -> P
         emergency_cost=int(row["emergency_cost"])
         if pd.notna(row.get("emergency_cost"))
         else None,
-        top_shap_contributors=_shap_to_contributors(row),
+        top_shap_contributors=ml_shap,
     )
 
 

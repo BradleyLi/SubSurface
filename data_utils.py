@@ -1,10 +1,10 @@
 """
 data_utils.py — Pipe network data for CityNerve.
-Supports two modes:
-  • Synthetic (default) — generated locally, always works offline.
-  • Real          — fetched live from Toronto Open Data via real_data.py.
+Supports three modes:
+  • ml_enriched (default when use_real=True) — Toronto Open Data geometry + XGBoost predictions.
+  • Synthetic (use_real=False) — generated locally for offline demo only.
 
-Toggle via the sidebar switch or the USE_REAL_DATA env variable.
+Toggle via the top-nav switch or USE_REAL_DATA env variable.
 """
 
 from __future__ import annotations
@@ -26,21 +26,14 @@ WARDS: dict[str, tuple[float, float]] = {
     "York":         (43.700, -79.470),
 }
 
-MATERIALS       = ["Cast Iron", "Ductile Iron", "PVC", "Concrete", "Asbestos Cement"]
-MATERIAL_WEIGHTS= [0.35, 0.30, 0.20, 0.10, 0.05]
-MATERIAL_RISK   = {
-    "Cast Iron":        0.90,
-    "Asbestos Cement":  0.82,
-    "Concrete":         0.52,
-    "Ductile Iron":     0.28,
-    "PVC":              0.08,
-}
+MATERIALS        = ["CI", "DIP", "PVC", "CONC", "AC"]
+MATERIAL_WEIGHTS = [0.35, 0.30, 0.20, 0.10, 0.05]
 MATERIAL_INSTALL = {
-    "Cast Iron":        (1920, 1969),
-    "Asbestos Cement":  (1948, 1980),
-    "Concrete":         (1938, 1984),
-    "Ductile Iron":     (1958, 2000),
-    "PVC":              (1974, 2010),
+    "CI":   (1920, 1969),
+    "AC":   (1948, 1980),
+    "CONC": (1938, 1984),
+    "DIP":  (1958, 2000),
+    "PVC":  (1974, 2010),
 }
 
 RISK_COLORS = {
@@ -58,20 +51,28 @@ N_PER_WARD = 100   # 600 total pipe segments
 # ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner=False)
-def get_pipes(use_real: bool = False) -> pd.DataFrame:
+def get_pipes(use_real: bool = True) -> pd.DataFrame:
     """
     Return pipe DataFrame in canonical schema.
-    Pass use_real=True to fetch live Toronto Open Data, False for synthetic demo.
-    The bool argument is part of the cache key, so toggling it fetches fresh data.
+    Pass use_real=True for Toronto Open Data enriched with ML predictions (default).
+    Pass use_real=False for synthetic demo data.
     """
     if use_real:
-        try:
-            from real_data import get_real_pipes
-            return get_real_pipes()
-        except Exception as e:
-            st.warning(f"⚠️ Could not load real data ({e}). Falling back to synthetic data.")
+        from ml_predictions import active_prediction_year
+
+        return _get_ml_enriched_pipes_cached(active_prediction_year())
 
     return _get_synthetic_pipes()
+
+
+@st.cache_data(
+    show_spinner="📡 Loading Toronto watermains with ML break-risk predictions…",
+    ttl=3600,
+)
+def _get_ml_enriched_pipes_cached(prediction_year: int) -> pd.DataFrame:
+    from ml_predictions import get_ml_enriched_pipes
+
+    return get_ml_enriched_pipes(max_dist=None, prediction_year=prediction_year)
 
 
 @st.cache_data(show_spinner=False)
@@ -116,8 +117,7 @@ def _get_synthetic_pipes() -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["age"] = 2024 - df["install_year"]
 
-    # Risk score — weighted composite
-    m_risk  = df["material"].map(MATERIAL_RISK)
+    # Demo-only risk score (synthetic mode — not used when use_real=True)
     age_n   = df["age"] / 104
     tree_n  = df["tree_count_5m"]        / (df["tree_count_5m"].max() + 1)
     comp_n  = df["complaints_12mo"]      / (df["complaints_12mo"].max() + 1)
@@ -127,14 +127,13 @@ def _get_synthetic_pipes() -> pd.DataFrame:
     brk_n   = df["break_count_10yr"]     / (df["break_count_10yr"].max() + 1)
 
     raw = (
-        0.26 * age_n  +
-        0.23 * m_risk +
-        0.13 * tree_n +
-        0.11 * comp_n +
-        0.09 * lead_n +
-        0.08 * surf_n +
-        0.06 * cut_n  +
-        0.04 * brk_n
+        0.32 * age_n  +
+        0.18 * tree_n +
+        0.14 * comp_n +
+        0.12 * lead_n +
+        0.10 * surf_n +
+        0.08 * cut_n  +
+        0.06 * brk_n
     )
     noise = rng.normal(0, 0.034, len(df))
     raw   = (raw + noise).clip(0.04, 0.97)
@@ -173,9 +172,10 @@ def _get_synthetic_pipes() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def get_shap(row: pd.Series) -> dict[str, float]:
+    """Synthetic-demo SHAP-style contributions (not used for ML-enriched pipes)."""
     return {
         "Pipe Age":                  round((row["age"] / 104) * 28, 1),
-        f"Material ({row['material']})": round(MATERIAL_RISK.get(row["material"], 0.3) * 22, 1),
+        f"Material ({row['material']})": 0.0,
         "Trees within 5m":           round(row["tree_count_5m"] * 2.8, 1),
         "311 Complaints (12mo)":     round(row["complaints_12mo"] * 2.4, 1),
         "Lead Exceedance %":         round(min(row["lead_exceedance_pct"] * 1.2, 14), 1),
@@ -275,12 +275,10 @@ def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFram
         _find_geojson_url,
         _fetch_geojson,
         _parse_features,
-        _add_risk_scores,
+        _add_supplemental_columns,
         DATASET_ID,
     )
-    import numpy as np
-
-    pkg_data  = _ckan_get("package_show", {"id": DATASET_ID})
+    pkg_data = _ckan_get("package_show", {"id": DATASET_ID})
     if not pkg_data.get("success"):
         raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
 
@@ -292,10 +290,8 @@ def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFram
     if not rows:
         raise RuntimeError("No valid Distribution Watermain features parsed.")
 
-    df  = pd.DataFrame(rows)
-    rng = np.random.default_rng(int(df["install_year"].mean()) if len(df) else 42)
-    df  = _add_risk_scores(df, rng=rng)
-    return df
+    df = pd.DataFrame(rows)
+    return _add_supplemental_columns(df)
 
 
 def get_ai_response(query: str, df: pd.DataFrame) -> str:

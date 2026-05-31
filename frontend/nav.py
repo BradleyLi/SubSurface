@@ -39,8 +39,12 @@ def render_top_nav(
     Render CityNerve top nav. Returns current use_real toggle value.
 
     current: page id from NAV_PAGES (e.g. "risk_map", "overview").
+    When use_real is True (default), pipes use Toronto Open Data enriched with ML predictions.
     """
     hide_sidebar()
+
+    if use_real_key not in st.session_state:
+        st.session_state[use_real_key] = True
 
     logo_col, gap_col, *nav_cols, toggle_col = st.columns(
         [2.6, 0.2] + [1.05] * len(NAV_PAGES) + [2.2]
@@ -60,14 +64,14 @@ def render_top_nav(
                 label = f"▸ {label}"
             st.page_link(page["path"], label=label)
 
-    use_real = st.session_state.get(use_real_key, False)
+    use_real = st.session_state.get(use_real_key, True)
     if show_data_toggle:
         with toggle_col:
             use_real = st.toggle(
-                "Toronto Open Data",
+                "Toronto + ML model",
                 value=use_real,
                 key=use_real_key,
-                help="Live Toronto Open Data vs synthetic demo pipes",
+                help="Toronto Open Data geometry with XGBoost break-risk predictions (2016 snapshot)",
             )
 
     st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
@@ -80,3 +84,19 @@ def w1_session_key(pipe_id: str) -> str:
 
 def w2_session_key(pipe_id: str) -> str:
     return f"w2_run_{pipe_id}"
+
+
+def reconcile_multiselect_filter(key: str, options: list) -> None:
+    """
+    Reset a multiselect filter when session values no longer match options.
+
+    Needed after material codes changed from display names (Cast Iron) to raw
+    Open Data codes (CI, DIP, …) — otherwise only overlapping labels like PVC
+    stay selected and the map shows a partial network (~12.7k pipes).
+    """
+    opts = list(options)
+    selected = st.session_state.get(key)
+    if selected is None:
+        return
+    if not set(selected).issubset(set(opts)):
+        st.session_state[key] = opts
