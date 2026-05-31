@@ -15,7 +15,9 @@ field is resolved via resource_show to get the actual download link.
 
 from __future__ import annotations
 import json
+import os
 import urllib.request
+from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
@@ -24,6 +26,11 @@ import pandas as pd
 import streamlit as st
 
 # ── Constants ─────────────────────────────────────────────────────────────────
+
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_WATERMAINS_DIR = BASE_DIR / "data" / "watermains"
+DIST_GEOJSON_NAME = "Distribution Watermain - 4326.geojson"
+TRANS_GEOJSON_NAME = "Transmission Watermain - 4326.geojson"
 
 BASE_URL   = "https://ckan0.cf.opendata.inter.prod-toronto.ca"
 CKAN_BASE  = BASE_URL + "/api/3/action"
@@ -109,19 +116,41 @@ def _find_geojson_url(resources: list[dict], name_fragment: str) -> str:
     return _resolve_resource_url(candidates[0])
 
 
+def watermains_data_dir() -> Path:
+    """Directory for local GeoJSON watermain layers (override via WATERMAINS_DATA_DIR)."""
+    return Path(os.getenv("WATERMAINS_DATA_DIR", str(DEFAULT_WATERMAINS_DIR)))
+
+
+def local_watermains_paths() -> tuple[Path | None, Path | None]:
+    """Return (distribution_path, transmission_path) when both local files exist."""
+    data_dir = watermains_data_dir()
+    dist_path = data_dir / DIST_GEOJSON_NAME
+    tx_path = data_dir / TRANS_GEOJSON_NAME
+    if dist_path.is_file() and tx_path.is_file():
+        return dist_path, tx_path
+    return None, None
+
+
+def _sample_features(features: list[dict], max_features: Optional[int] = None) -> list[dict]:
+    if max_features and len(features) > max_features:
+        step = max(1, len(features) // max_features)
+        return features[::step][:max_features]
+    return features
+
+
+def _load_geojson_features(path: Path, max_features: Optional[int] = None) -> list[dict]:
+    """Load features from a local GeoJSON file."""
+    with path.open(encoding="utf-8") as handle:
+        data = json.load(handle)
+    return _sample_features(data.get("features", []), max_features=max_features)
+
+
 def _fetch_geojson(url: str, max_features: Optional[int] = None) -> list[dict]:
     """Download a GeoJSON file and return up to max_features features."""
     with urllib.request.urlopen(url, timeout=120) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
-    data     = json.loads(raw)
-    features = data.get("features", [])
-
-    if max_features and len(features) > max_features:
-        # Sample evenly across the file to preserve geographic coverage
-        step     = max(1, len(features) // max_features)
-        features = features[::step][:max_features]
-
-    return features
+    data = json.loads(raw)
+    return _sample_features(data.get("features", []), max_features=max_features)
 
 
 # ── GeoJSON → row parsing ─────────────────────────────────────────────────────
@@ -251,20 +280,16 @@ def _add_supplemental_columns(df: pd.DataFrame) -> pd.DataFrame:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 @st.cache_data(
-    show_spinner="📡 Fetching Toronto Open Data — Transmission & Distribution Watermains...",
+    show_spinner="Loading Transmission & Distribution Watermains…",
     ttl=3600,
 )
 def get_real_pipes(max_dist: int = MAX_DIST_FEATURES) -> pd.DataFrame:
     """
-    Fetch Transmission Watermain + Distribution Watermain GeoJSON datasets
-    from Open Data Toronto (CKAN) and return a DataFrame with geometry and
-    attributes. Risk fields are placeholders until ML enrichment.
+    Load Transmission + Distribution watermain GeoJSON and return a DataFrame
+    with geometry and attributes. Risk fields are placeholders until ML enrichment.
 
-    Uses the standard CKAN API pattern recommended by Toronto Open Data:
-      1. package_show  → discover all resources in the "watermains" package
-      2. Iterate resources; for non-datastore_active GeoJSON files, resolve
-         the download URL (via resource["url"] or resource_show fallback)
-      3. Download, parse, risk-score, and merge both layers
+    Prefers local files in data/watermains/ when present; otherwise fetches from
+    Open Data Toronto (CKAN).
 
     Parameters
     ----------
@@ -276,29 +301,28 @@ def get_real_pipes(max_dist: int = MAX_DIST_FEATURES) -> pd.DataFrame:
     -------
     pd.DataFrame — same column schema as data_utils._get_synthetic_pipes()
     """
-    # Step 1 — Discover all resources in the "watermains" package
-    pkg_data = _ckan_get("package_show", {"id": DATASET_ID})
-    if not pkg_data.get("success"):
-        raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
+    dist_path, tx_path = local_watermains_paths()
+    if dist_path and tx_path:
+        tx_feats = _load_geojson_features(tx_path, max_features=None)
+        dist_feats = _load_geojson_features(dist_path, max_features=max_dist)
+    else:
+        pkg_data = _ckan_get("package_show", {"id": DATASET_ID})
+        if not pkg_data.get("success"):
+            raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
 
-    resources = pkg_data["result"]["resources"]
+        resources = pkg_data["result"]["resources"]
+        tx_url = _find_geojson_url(resources, "Transmission")
+        dist_url = _find_geojson_url(resources, "Distribution")
+        tx_feats = _fetch_geojson(tx_url, max_features=None)
+        dist_feats = _fetch_geojson(dist_url, max_features=max_dist)
 
-    # Step 2 — Find the GeoJSON download URLs for each watermain layer
-    tx_url   = _find_geojson_url(resources, "Transmission")
-    dist_url = _find_geojson_url(resources, "Distribution")
-
-    # Step 3 — Download features
-    tx_feats   = _fetch_geojson(tx_url,   max_features=None)      # ~400, load all
-    dist_feats = _fetch_geojson(dist_url, max_features=max_dist)  # sampled
-
-    # Step 4 — Parse into rows
-    rows  = _parse_features(tx_feats,   pipe_type="Transmission")
+    rows = _parse_features(tx_feats, pipe_type="Transmission")
     rows += _parse_features(dist_feats, pipe_type="Distribution")
 
     if not rows:
         raise RuntimeError(
             "No valid pipe features could be parsed from the GeoJSON files. "
-            "Check that the Toronto Open Data portal is reachable."
+            "Check local data/watermains/ or that the Toronto Open Data portal is reachable."
         )
 
     df = pd.DataFrame(rows)

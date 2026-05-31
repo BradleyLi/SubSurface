@@ -261,12 +261,13 @@ Ask me about specific pipes, replacement priorities, or "what-if" scenarios.""",
 
 
 @st.cache_data(
-    show_spinner="📡 Fetching Distribution Watermains from Toronto Open Data…",
+    show_spinner="Loading Distribution Watermains…",
     ttl=3600,
 )
 def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFrame:
     """
-    Fetch only the Distribution Watermain GeoJSON layer from Toronto Open Data.
+    Load the Distribution Watermain GeoJSON layer.
+    Prefers data/watermains/ when present; otherwise fetches from Toronto Open Data.
     Pass max_features=None to load the full layer (~46k+ features).
     Returns a DataFrame with geometry, material, diameter, install year, etc.
     Raises RuntimeError if the dataset is unreachable.
@@ -275,18 +276,26 @@ def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFram
         _ckan_get,
         _find_geojson_url,
         _fetch_geojson,
+        _load_geojson_features,
         _parse_features,
         _add_supplemental_columns,
         DATASET_ID,
+        local_watermains_paths,
     )
-    pkg_data = _ckan_get("package_show", {"id": DATASET_ID})
-    if not pkg_data.get("success"):
-        raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
 
-    resources = pkg_data["result"]["resources"]
-    dist_url  = _find_geojson_url(resources, "Distribution")
-    features  = _fetch_geojson(dist_url, max_features=max_features)
-    rows      = _parse_features(features, pipe_type="Distribution")
+    dist_path, _ = local_watermains_paths()
+    if dist_path:
+        features = _load_geojson_features(dist_path, max_features=max_features)
+    else:
+        pkg_data = _ckan_get("package_show", {"id": DATASET_ID})
+        if not pkg_data.get("success"):
+            raise RuntimeError(f"CKAN package_show failed for '{DATASET_ID}'")
+
+        resources = pkg_data["result"]["resources"]
+        dist_url = _find_geojson_url(resources, "Distribution")
+        features = _fetch_geojson(dist_url, max_features=max_features)
+
+    rows = _parse_features(features, pipe_type="Distribution")
 
     if not rows:
         raise RuntimeError("No valid Distribution Watermain features parsed.")

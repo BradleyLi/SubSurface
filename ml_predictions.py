@@ -1,7 +1,7 @@
 """
 Load XGBoost pipe predictions and enrich Toronto Open Data pipe rows.
 
-Joins live GeoJSON geometry (real_data) with model output from:
+Joins Toronto watermain geometry (local data/watermains/ or Open Data) with model output from:
   ml-models/.structured-data/predictions/pipe_predictions_{start}_{end}.jsonl
 """
 
@@ -27,6 +27,9 @@ DEFAULT_PREDICTIONS_PATH = (
     / "pipe_predictions_2015_2016.jsonl"
 )
 DEFAULT_PREDICTION_YEAR = 2016
+DEFAULT_ENRICHED_PATH = (
+    BASE_DIR / "data" / "watermains" / "ml_enriched_pipes.parquet"
+)
 
 
 def active_prediction_year() -> int:
@@ -49,6 +52,97 @@ def normalize_pipe_join_key(pipe_id: str) -> str:
 
 def predictions_path() -> Path:
     return Path(os.getenv("ML_PREDICTIONS_PATH", str(DEFAULT_PREDICTIONS_PATH)))
+
+
+def enriched_pipes_path() -> Path:
+    """Pre-joined geometry + ML predictions (override via ML_ENRICHED_PATH)."""
+    return Path(os.getenv("ML_ENRICHED_PATH", str(DEFAULT_ENRICHED_PATH)))
+
+
+def _enriched_source_paths() -> list[Path]:
+    """Inputs that invalidate a cached enriched parquet when newer."""
+    from real_data import watermains_data_dir, DIST_GEOJSON_NAME, TRANS_GEOJSON_NAME
+
+    data_dir = watermains_data_dir()
+    return [
+        data_dir / DIST_GEOJSON_NAME,
+        data_dir / TRANS_GEOJSON_NAME,
+        predictions_path(),
+    ]
+
+
+def _enriched_cache_is_fresh(cache_path: Path) -> bool:
+    if not cache_path.is_file():
+        return False
+    cache_mtime = cache_path.stat().st_mtime
+    for source in _enriched_source_paths():
+        if source.is_file() and source.stat().st_mtime > cache_mtime:
+            return False
+    return True
+
+
+def _prepare_enriched_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if "ml_top_shap_contributors" in out.columns:
+        out["ml_top_shap_contributors"] = out["ml_top_shap_contributors"].map(
+            lambda value: json.dumps(value) if not isinstance(value, str) else value
+        )
+    if "risk_level" in out.columns:
+        out["risk_level"] = out["risk_level"].astype(str)
+    return out
+
+
+def _restore_enriched_from_parquet(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if "ml_top_shap_contributors" in out.columns:
+        def _parse_shap(raw: object) -> list | str:
+            if isinstance(raw, list):
+                return raw
+            if isinstance(raw, str):
+                try:
+                    parsed = json.loads(raw)
+                    return parsed if isinstance(parsed, list) else raw
+                except json.JSONDecodeError:
+                    return raw
+            return raw
+
+        out["ml_top_shap_contributors"] = out["ml_top_shap_contributors"].map(_parse_shap)
+    return out
+
+
+def load_enriched_pipes_static(path: Path | None = None) -> pd.DataFrame:
+    """Load pre-joined pipes from disk (fast path)."""
+    cache_path = path or enriched_pipes_path()
+    if not _enriched_cache_is_fresh(cache_path):
+        raise FileNotFoundError(f"Enriched cache missing or stale: {cache_path}")
+    df = pd.read_parquet(cache_path)
+    return _restore_enriched_from_parquet(df)
+
+
+def build_enriched_pipes_cache(
+    *,
+    max_dist: int | None = None,
+    prediction_year: int | None = None,
+    predictions_file: Path | None = None,
+    output_path: Path | None = None,
+) -> Path:
+    """Join GeoJSON geometry with ML predictions once and write a static parquet file."""
+    from real_data import get_real_pipes
+
+    year = active_prediction_year() if prediction_year is None else prediction_year
+    preds = load_predictions(predictions_file, prediction_year=year)
+    real_df = get_real_pipes(max_dist=max_dist)
+    enriched = enrich_real_pipes_with_predictions(real_df, preds)
+    if enriched.empty:
+        raise RuntimeError(
+            "No Toronto pipes matched ML predictions. "
+            "Check pipe_id formats and that watermain assets overlap the model panel."
+        )
+
+    cache_path = output_path or enriched_pipes_path()
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    _prepare_enriched_for_parquet(enriched).to_parquet(cache_path, index=False)
+    return cache_path
 
 
 def load_predictions(
@@ -103,8 +197,6 @@ def _flatten_prediction(rec: dict[str, Any]) -> dict[str, Any]:
         "ml_breaks_last_5_years": hist.get("breaks_last_5_years"),
         "ml_years_since_last_break": hist.get("years_since_last_break"),
         "ml_material": normalize_material_code(attrs.get("material")),
-        "ml_installation_year": attrs.get("installation_year"),
-        "ml_age_years": attrs.get("age_years"),
     }
 
 
@@ -134,8 +226,6 @@ def enrich_real_pipes_with_predictions(
         "ml_breaks_last_5_years",
         "ml_years_since_last_break",
         "ml_material",
-        "ml_installation_year",
-        "ml_age_years",
     ]
     preds = pred_df[pred_cols].copy()
 
@@ -146,6 +236,7 @@ def enrich_real_pipes_with_predictions(
     if "ml_material" in merged.columns:
         merged["material"] = merged["ml_material"]
 
+<<<<<<< HEAD
     if "ml_installation_year" in merged.columns:
         inst = pd.to_numeric(merged["ml_installation_year"], errors="coerce")
         merged["install_year"] = inst.fillna(merged["install_year"]).astype(int)
@@ -154,6 +245,8 @@ def enrich_real_pipes_with_predictions(
         ml_age = pd.to_numeric(merged["ml_age_years"], errors="coerce").round()
         merged["age"] = ml_age.fillna(merged["age"]).abs().astype(int)
 
+=======
+>>>>>>> da3b215 (static-map)
     merged["risk_score"] = (merged["predicted_break_probability"] * 100.0).round(1)
     merged["risk_level"] = pd.cut(
         merged["risk_percentile"],
@@ -191,7 +284,11 @@ def get_ml_enriched_pipes(
     prediction_year: int | None = None,
     predictions_file: Path | None = None,
 ) -> pd.DataFrame:
-    """Load Toronto GeoJSON pipes and overlay ML model predictions."""
+    """Load Toronto pipes with ML predictions — from static cache when available."""
+    cache_path = enriched_pipes_path()
+    if max_dist is None and _enriched_cache_is_fresh(cache_path):
+        return load_enriched_pipes_static(cache_path)
+
     from real_data import get_real_pipes
 
     preds = load_predictions(predictions_file, prediction_year=prediction_year)
@@ -200,7 +297,7 @@ def get_ml_enriched_pipes(
     if enriched.empty:
         raise RuntimeError(
             "No Toronto pipes matched ML predictions. "
-            "Check pipe_id formats and that Open Data assets overlap the model panel."
+            "Check pipe_id formats and that watermain assets overlap the model panel."
         )
     return enriched
 

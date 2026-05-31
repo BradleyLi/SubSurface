@@ -53,6 +53,11 @@ def _records_to_df(records: list[dict]) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def get_pipes_api(use_real: bool = True) -> pd.DataFrame:
+    if use_real:
+        from ml_predictions import enriched_pipes_path, _enriched_cache_is_fresh
+
+        if _enriched_cache_is_fresh(enriched_pipes_path()):
+            return _local_get_pipes(use_real=True)
     try:
         data = _request_json("/api/pipes", query={"use_real": str(use_real).lower()})
         return _records_to_df(data["records"])
