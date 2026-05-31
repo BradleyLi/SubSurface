@@ -7,6 +7,8 @@ Shared Ollama client, dual-workflow profiles, and Nemotron gateways for FastAPI.
 ```text
 agent/
 ├── harness/              # settings, endpoints, client, health
+│   ├── voice_bot.py      # standalone push-to-talk voice UI (port 8503)
+│   └── voice_transcript.py
 ├── evidence.py           # W1 evidence packet from pipe row + SHAP
 ├── gateway.py            # W1 orchestration
 ├── w2_gateway.py         # W2 multi-role + synthesis
@@ -82,6 +84,126 @@ cp .env.example .env
 ```
 
 Expect several minutes for a live W2 run (5 Super calls).
+
+## Voice call session
+
+Standalone **CityNerve Reporting Line** (`agent/harness/voice_bot.py`) — not part of Streamlit or FastAPI. Callers report a watermain break; the agent takes notes for emergency dispatch over up to three spoken exchanges.
+
+### Prerequisites
+
+1. **Python venv** with dependencies installed:
+
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+
+2. **Ollama** running for the profile you will use (check with `./agent/scripts/check_endpoints.sh`):
+
+   | `VOICE_LLM_PROFILE` | Ollama port | Model |
+   |---------------------|-------------|-------|
+   | `workflow1` (default) | `:11436` | `nemotron-nano:12b-v2` |
+   | `workflow2` | `:11434` | `nemotron-3-super:latest` |
+
+3. **`.env`** at repo root — copy from `agent/.env.example` if needed. Voice-related keys are at the bottom of that file.
+
+### Run
+
+```bash
+./scripts/run_voice_chat.sh
+```
+
+Equivalent manual start:
+
+```bash
+export PYTHONPATH="$(pwd)"
+.venv/bin/python agent/harness/voice_bot.py
+```
+
+The server prints the client URL, transcript directory, LLM profile, and TTS engine on startup. Default client URL:
+
+**http://127.0.0.1:8503/client/**
+
+Override host/port with `VOICE_CHAT_HOST`, `VOICE_CHAT_PORT`, or CLI flags `--host` / `--port`.
+
+### Using the call UI
+
+1. Open the client URL in **Firefox** (or any browser with mic support).
+2. Grant microphone permission.
+3. **Hold** the mic button while speaking; **release** to send the clip.
+4. The server transcribes with local **faster-whisper**, sends text to Ollama, and returns the agent reply (and optional TTS audio).
+5. Repeat for up to **`VOICE_MAX_USER_TURNS`** exchanges (default 3). On the final turn the agent summarizes and closes the call.
+6. Click **End call** to finish and save the transcript.
+
+While waiting for the model, the browser plays a short hold message:
+
+- **Turn 1:** *"I'm looking into this, let me get back to you in a moment."*
+- **Turn 2:** *"Ok, let me note that down."*
+- **Turn 3:** *"Ok, we're almost done here, please bear with me."*
+
+Customize via `VOICE_HOLD_MESSAGE`, `VOICE_HOLD_MESSAGE_LATER`, and `VOICE_HOLD_MESSAGE_TURN3` in `.env`.
+
+### What gets saved
+
+| Artifact | When | Location |
+|----------|------|----------|
+| Transcript JSON | **End call** only | `voice_sessions/voice_transcript_<session>_<timestamp>.json` |
+| Reply TTS WAV | During call (playback only) | `voice_sessions/tts_audio/reply_*.wav` — ephemeral, gitignored, cleaned on server restart |
+| Hold-message cache | First use | `voice_sessions/tts_audio/hold_message_turn*.wav` — gitignored |
+
+The transcript contains caller and agent turns (no system prompt), session metadata, and model info. See `agent/harness/voice_transcript.py`.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `VOICE_CHAT_HOST` | `127.0.0.1` | Bind address |
+| `VOICE_CHAT_PORT` | `8503` | HTTP port |
+| `VOICE_LLM_PROFILE` | `workflow1` | `workflow1` or `workflow2` |
+| `VOICE_OUTPUT_DIR` | `voice_sessions` | Transcript output directory |
+| `VOICE_MAX_USER_TURNS` | `3` | Max caller exchanges |
+| `VOICE_MAX_TOKENS` | `3000` | LLM reply token limit |
+| `VOICE_WHISPER_MODEL` | `base.en` | faster-whisper model |
+| `VOICE_WHISPER_DEVICE` | `auto` | Whisper device (`cpu`, `cuda`, `auto`) |
+| `VOICE_MODEL_CACHE_DIR` | `voice_models` | Whisper/Kokoro download cache |
+| `VOICE_TTS_ENGINE` | `none` | `kokoro`, `piper`, or `none` |
+| `VOICE_TTS_VOICE` | `af_heart` | Kokoro voice id |
+| `VOICE_TTS_DEVICE` | `cpu` | Kokoro device — use `cpu` to avoid CUDA OOM with Ollama |
+| `VOICE_PIPER_MODEL` | *(empty)* | Path to Piper `.onnx` model when using `piper` |
+| `VOICE_HOLD_MESSAGE` | *(see .env.example)* | Hold line on turn 1 |
+| `VOICE_HOLD_MESSAGE_LATER` | *(see .env.example)* | Hold line on turn 2 |
+| `VOICE_HOLD_MESSAGE_TURN3` | *(see .env.example)* | Hold line on turn 3 |
+
+### Spoken replies (optional)
+
+With `VOICE_TTS_ENGINE=none` (default), replies appear as on-screen captions only.
+
+For audio playback in the browser:
+
+```bash
+# in .env
+VOICE_TTS_ENGINE=kokoro
+VOICE_TTS_DEVICE=cpu
+```
+
+The server synthesizes each reply to a temporary WAV, serves it to the browser, and does not keep it in version control. Alternatively, set `VOICE_TTS_ENGINE=piper` and point `VOICE_PIPER_MODEL` at a Piper ONNX model.
+
+### Troubleshooting
+
+- **No speech detected** — speak longer; check mic permissions and input device.
+- **Ollama errors** — confirm the profile's port is up: `./agent/scripts/check_endpoints.sh`
+- **CUDA OOM** — set `VOICE_TTS_DEVICE=cpu` and/or `VOICE_WHISPER_DEVICE=cpu`
+- **No hold audio** — hold clips require TTS enabled (`VOICE_TTS_ENGINE=kokoro` or `piper`); otherwise the browser falls back to Web Speech API text-to-speech
+
+## Ports
+
+| Service | Default port |
+|---------|--------------|
+| FastAPI | 8000 |
+| Streamlit | 8501 |
+| Voice call (Reporting Line) | 8503 |
+| Ollama W2 | 11434 |
+| Ollama W1 | 11436 |
 
 ## NemoClaw
 

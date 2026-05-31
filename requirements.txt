@@ -11,3 +11,8 @@ openai>=1.30.0
 python-dotenv>=1.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+python-multipart>=0.0.9
+pipecat-ai[silero,ollama,kokoro,runner,webrtc,whisper]
+faster-whisper
+kokoro>=0.9.4
+soundfile>=0.12.1

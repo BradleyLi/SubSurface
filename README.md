@@ -35,6 +35,38 @@ streamlit run app.py --server.port 8501
 
 Verify Ollama endpoints: `./agent/scripts/check_endpoints.sh`
 
+### Voice call session (optional)
+
+Standalone **CityNerve Reporting Line** — simulates a live watermain-break call. Runs on its own port (default **8503**), separate from Streamlit and FastAPI.
+
+**Prerequisites**
+
+- Python venv with `pip install -r requirements.txt`
+- Ollama running for the chosen workflow (default **Workflow 1** on `:11436`; set `VOICE_LLM_PROFILE=workflow2` for W2 on `:11434`)
+- Firefox or another browser with microphone access
+
+**Start**
+
+```bash
+cp agent/.env.example .env   # if you have not already
+./scripts/run_voice_chat.sh
+```
+
+Open **http://127.0.0.1:8503/client/** in the browser.
+
+**During the call**
+
+1. Allow microphone access when prompted.
+2. **Hold** the mic button to speak; **release** to send. Whisper transcribes locally; the agent replies via Ollama.
+3. Up to **3 exchanges** (caller speaks, agent responds). While the model is thinking, the agent plays a short hold line (first turn: *"I'm looking into this…"*; later turns: *"Ok, let me note that down."*).
+4. Click **End call** when finished. That writes the transcript JSON to `voice_sessions/` — nothing is saved before end call.
+
+**Optional: spoken replies**
+
+Set `VOICE_TTS_ENGINE=kokoro` in `.env` for natural local TTS playback in the browser. Use `VOICE_TTS_DEVICE=cpu` if GPU memory is tight while Ollama is loaded. Leave `VOICE_TTS_ENGINE=none` for text-only captions.
+
+Full env reference and troubleshooting: [agent/README.md](agent/README.md#voice-call-session).
+
 ## Agent + app stack
 
 | Piece | Role | Port |
@@ -44,6 +76,7 @@ Verify Ollama endpoints: `./agent/scripts/check_endpoints.sh`
 | **app.py + pages/** (Streamlit) | UI — map, simulator, assistant; HTTP to FastAPI only | 8501 |
 | **Ollama W1** | Fast summaries (`nemotron-nano:12b-v2`) | 11436 |
 | **Ollama W2** | Deep analysis (`nemotron-3-super:latest`) | 11434 |
+| **Voice call** | Push-to-talk reporting line — local Whisper STT, Ollama agent (W1 default), transcript JSON on end call | 8503 |
 | **NemoClaw** | Agent sandboxes for investigation | see [agent/nemoclaw/](agent/nemoclaw/) |
 
 Details: [agent/README.md](agent/README.md) · [GX10-Nemotron-Ollama-Cheatsheet.md](GX10-Nemotron-Ollama-Cheatsheet.md)

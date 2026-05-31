@@ -18,6 +18,12 @@ env/
 # Workflow 2 analysis artifacts
 data/analysis_runs/
 
+# Voice chat session exports (see agent/harness/voice_bot.py)
+voice_sessions/*.json
+voice_sessions/debug_audio/
+voice_sessions/tts_audio/
+voice_models/
+
 # OS
 .DS_Store
 Thumbs.db
