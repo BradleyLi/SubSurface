@@ -1,0 +1,51 @@
+name: rapids-26.04
+
+channels:
+  - rapidsai
+  - nvidia
+  - conda-forge
+
+dependencies:
+  - python=3.13
+  - rapids=26.04
+  - cuda-version>=13.0,<=13.1
+
+  # Core GPU stack (MUST be conda-managed)
+  - cudf
+  - cupy
+
+  # Scientific core (conda-safe versions resolved by solver)
+  - numpy
+  - pandas
+  - scipy
+  - pyarrow
+  - scikit-learn
+
+  # Geo stack (conda preferred for binary compatibility)
+  - geopandas
+  - shapely
+  - pyproj
+  - pyogrio
+
+  # RAPIDS dependencies
+  - numba
+  - llvmlite
+
+  # Utilities
+  - pip
+  - packaging
+  - python-dateutil
+  - six
+  - threadpoolctl
+  - tqdm
+
+  - pip:
+      # ML / interpretability
+      - shap==0.52.0
+      - xgboost==3.2.0
+
+      # utility libs (safe pip)
+      - certifi==2026.5.20
+      - cloudpickle==3.1.2
+      - joblib==1.5.3
+      - slicer==0.0.8
