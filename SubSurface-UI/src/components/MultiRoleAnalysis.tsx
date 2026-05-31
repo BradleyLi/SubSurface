@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Pipe } from "../types/pipe";
 import type { AnalysisRunResponse, AnalysisRunState } from "../types/analysisRun";
@@ -124,6 +124,7 @@ export default function MultiRoleAnalysis({
   const [cachedRuns, setCachedRuns] = useState<
     Record<string, AnalysisRunResponse>
   >({});
+  const activeRunController = useRef<AbortController | null>(null);
 
   const matchedPipeId = voiceMatch?.match?.pipe_id ?? null;
   const effectivePipeId =
@@ -146,6 +147,9 @@ export default function MultiRoleAnalysis({
   }, []);
 
   useEffect(() => {
+    activeRunController.current?.abort();
+    activeRunController.current = null;
+
     if (!effectivePipeId) {
       setState({ status: "idle" });
       return;
@@ -161,21 +165,44 @@ export default function MultiRoleAnalysis({
   const runAnalysis = useCallback(async () => {
     if (!effectivePipeId) return;
 
+    activeRunController.current?.abort();
+    const controller = new AbortController();
+    activeRunController.current = controller;
     setState({ status: "loading", pipeId: effectivePipeId });
     try {
       const data = await createAnalysisRun({
         pipe_id: effectivePipeId,
         use_real: useReal,
         use_latest_voice_transcript: true,
-      });
+      }, controller.signal);
       setCachedRuns((prev) => ({ ...prev, [effectivePipeId]: data }));
       setState({ status: "ready", pipeId: effectivePipeId, data });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Workflow 2 analysis failed.";
-      setState({ status: "error", pipeId: effectivePipeId, message });
+      if (controller.signal.aborted) {
+        setState({ status: "idle" });
+      } else {
+        setState({ status: "error", pipeId: effectivePipeId, message });
+      }
+    } finally {
+      if (activeRunController.current === controller) {
+        activeRunController.current = null;
+      }
     }
   }, [effectivePipeId, useReal]);
+
+  const cancelAnalysis = useCallback(() => {
+    activeRunController.current?.abort();
+    activeRunController.current = null;
+    setState({ status: "idle" });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      activeRunController.current?.abort();
+    };
+  }, []);
 
   const w2Ok = health?.ok ?? false;
 
@@ -246,6 +273,15 @@ export default function MultiRoleAnalysis({
       >
         Run multi-role analysis (Super)
       </button>
+      {state.status === "loading" && !isStale && (
+        <button
+          type="button"
+          className="w2-cancel-button"
+          onClick={cancelAnalysis}
+        >
+          Cancel report
+        </button>
+      )}
 
       {state.status === "loading" && !isStale && (
         <div className="w2-loading">

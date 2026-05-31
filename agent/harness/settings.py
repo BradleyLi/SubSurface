@@ -20,12 +20,15 @@ class HarnessSettings(BaseSettings):
     workflow1_openai_base_url: str = "http://127.0.0.1:11436/v1"
     workflow1_model: str = "nemotron-nano:12b-v2"
     workflow1_context_window: int = 128_000  # Nemotron-Nano 12B v2 (+ VL variant): 128K tokens
-    workflow1_max_tokens: int = 5000
+    workflow1_max_tokens: int = 1024
+    workflow1_num_ctx: int = 8192
     llm_temperature: float = 0.4
 
     workflow2_openai_base_url: str = "http://127.0.0.1:11434/v1"
     workflow2_model: str = "nemotron-3-super:latest"
-    workflow2_max_tokens: int = 500_000
+    workflow2_max_tokens: int = 10_000
+    workflow2_num_ctx: int = 32768
+    ollama_keep_alive: str = "24h"
     openai_api_key: str = "ollama"
 
     nemoclaw_w1_sandbox: str = "hackathon-w1"

@@ -72,7 +72,7 @@ Risk Map: **Run multi-role analysis (Super)** — shows caller match banner when
 
 Overview **Generate Order Report** runs W2 once for the caller-matched pipe when that pipe is in the selected queue.
 
-Set `W2_PARALLEL=false` for sequential roles if GPU memory is tight.
+Workflow 2 runs roles sequentially by default because Nemotron on Ollama may reject parallel requests; set `W2_PARALLEL=true` only on backends that support concurrent generation.
 
 ## Config
 

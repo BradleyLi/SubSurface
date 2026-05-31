@@ -53,3 +53,29 @@ def load_file(run_id: str, filename: str) -> str | None:
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def load_latest_run_for_pipe(pipe_id: str) -> dict | None:
+    """Return the most recent saved manifest for a pipe, or None if absent.
+
+    Used by the demo cache path to replay a previously computed run instead of
+    re-running the full multi-role workflow.
+    """
+    if not RUNS_DIR.is_dir():
+        return None
+
+    best_manifest: dict | None = None
+    best_key: tuple[str, float] = ("", 0.0)
+    for manifest_path in RUNS_DIR.glob("*/manifest.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if manifest.get("pipe_id") != pipe_id:
+            continue
+        created_at = str(manifest.get("created_at", ""))
+        key = (created_at, manifest_path.stat().st_mtime)
+        if best_manifest is None or key > best_key:
+            best_manifest = manifest
+            best_key = key
+    return best_manifest

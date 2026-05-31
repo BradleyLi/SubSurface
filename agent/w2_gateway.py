@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+from time import perf_counter
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -46,6 +48,8 @@ from agent.w2_storage import save_run
 from agent.w2_template import template_role_report, template_synthesis
 from data_utils import get_pipes
 
+logger = logging.getLogger(__name__)
+
 _ALL_ROLES = [
     RoleName.ENGINEER,
     RoleName.POLICE,
@@ -62,7 +66,7 @@ _ROLE_CONTEXT_ATTR = {
 
 
 def _w2_parallel() -> bool:
-    return os.getenv("W2_PARALLEL", "true").lower() in ("1", "true", "yes")
+    return os.getenv("W2_PARALLEL", "false").lower() in ("1", "true", "yes")
 
 
 def _append_context(existing: str, addition: str) -> str:
@@ -159,6 +163,8 @@ async def _call_role(
     attr = _ROLE_CONTEXT_ATTR[role]
     role_context = getattr(per_role_ctx, attr, "")
     messages = build_role_messages(packet, role, role_context=role_context)
+    started = perf_counter()
+    logger.info("Workflow 2 role %s started for pipe %s", role.value, packet.pipe_id)
     try:
         markdown = await harness_chat(
             WorkflowProfile.WORKFLOW2,
@@ -173,8 +179,21 @@ async def _call_role(
             source="nemotron",
             filename=role_filename(role),
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Workflow 2 role %s fell back to template for pipe %s: %s",
+            role.value,
+            packet.pipe_id,
+            exc,
+        )
         return template_role_report(packet, role)
+    finally:
+        logger.info(
+            "Workflow 2 role %s finished for pipe %s in %.1fs",
+            role.value,
+            packet.pipe_id,
+            perf_counter() - started,
+        )
 
 
 async def _call_synthesis(
@@ -190,6 +209,8 @@ async def _call_synthesis(
         role_reports,
         synthesis_context=per_role_ctx.synthesis,
     )
+    started = perf_counter()
+    logger.info("Workflow 2 synthesis started for pipe %s", packet.pipe_id)
     try:
         raw = await harness_chat(
             WorkflowProfile.WORKFLOW2,
@@ -210,9 +231,20 @@ async def _call_synthesis(
                 f"{packet.risk_model.model_name}:{packet.risk_model.model_version}"
             )
         return final_md, plan, "nemotron"
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Workflow 2 synthesis fell back to template for pipe %s: %s",
+            packet.pipe_id,
+            exc,
+        )
         final_md, plan = template_synthesis(packet, role_reports)
         return final_md, plan, "template"
+    finally:
+        logger.info(
+            "Workflow 2 synthesis finished for pipe %s in %.1fs",
+            packet.pipe_id,
+            perf_counter() - started,
+        )
 
 
 async def workflow2_run(
@@ -224,7 +256,10 @@ async def workflow2_run(
     use_latest_voice_transcript: bool = True,
     transcript_path: str | None = None,
 ) -> AnalysisRunResponse:
+    run_started = perf_counter()
+    logger.info("Workflow 2 run requested for pipe %s (use_real=%s)", pipe_id, use_real)
     if df is None:
+        logger.info("Workflow 2 loading pipe dataframe for pipe %s", pipe_id)
         df = get_pipes(use_real=use_real)
 
     resolved_caller = _resolve_caller_report(
@@ -243,7 +278,14 @@ async def workflow2_run(
 
     per_role_ctx = PerRoleCallerContext()
     if resolved_caller is not None:
+        logger.info("Workflow 2 transcript orchestrator started for pipe %s", pipe_id)
+        started = perf_counter()
         per_role_ctx = await call_transcript_orchestrator(resolved_caller)
+        logger.info(
+            "Workflow 2 transcript orchestrator finished for pipe %s in %.1fs",
+            pipe_id,
+            perf_counter() - started,
+        )
 
     evidence = packet.assets[0]
     transcript_text = (
@@ -252,10 +294,22 @@ async def workflow2_run(
         else ""
     )
     procurement_candidates = select_candidate_items(evidence, transcript_text)
+    logger.info(
+        "Workflow 2 procurement finalizer started for pipe %s (%d candidates)",
+        pipe_id,
+        len(procurement_candidates),
+    )
+    started = perf_counter()
     finalized_items, procurement_missing, procurement_source = await finalize_items_llm(
         packet,
         procurement_candidates,
         role_context=per_role_ctx.synthesis,
+    )
+    logger.info(
+        "Workflow 2 procurement finalizer finished for pipe %s in %.1fs (source=%s)",
+        pipe_id,
+        perf_counter() - started,
+        procurement_source,
     )
     bill_of_materials = build_bom(
         pipe_id=pipe_id,
@@ -267,6 +321,7 @@ async def workflow2_run(
     per_role_ctx = _attach_bom_context(per_role_ctx, bill_of_materials)
 
     if _w2_parallel():
+        logger.info("Workflow 2 role reports starting in parallel for pipe %s", pipe_id)
         role_reports = list(
             await asyncio.gather(
                 *[
@@ -276,6 +331,7 @@ async def workflow2_run(
             )
         )
     else:
+        logger.info("Workflow 2 role reports starting sequentially for pipe %s", pipe_id)
         role_reports = []
         for role in _ALL_ROLES:
             role_reports.append(await _call_role(packet, role, per_role_ctx))
@@ -316,6 +372,13 @@ async def workflow2_run(
 
     storage_path = save_run(response)
     response.storage_dir = str(storage_path)
+    logger.info(
+        "Workflow 2 run completed for pipe %s in %.1fs (run_id=%s, source=%s)",
+        pipe_id,
+        perf_counter() - run_started,
+        response.run_id,
+        overall_source,
+    )
     return response
 
 

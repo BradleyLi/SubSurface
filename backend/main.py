@@ -5,14 +5,38 @@ Serves pipe/network data and AI workflows for the React UI (SubSurface-UI).
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 import json
+import logging
+import os
 from dataclasses import asdict
 from typing import Any, Literal
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+
+def _configure_logging() -> None:
+    """Emit application (agent.*) INFO logs under uvicorn.
+
+    Uvicorn only configures its own loggers, leaving the root logger at
+    WARNING with no handler, so progress logs from agent.w2_gateway etc. are
+    dropped. Honor CITYNERVE_LOG_LEVEL (set by scripts/run_citynerve.sh) so the
+    Workflow 2 multi-role analysis logs are visible in the server output.
+    """
+    level_name = os.getenv("CITYNERVE_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logging.getLogger("agent").setLevel(level)
+
+
+_configure_logging()
 
 from agent.gateway import workflow1_summary
 from agent.harness.endpoints import WorkflowProfile
@@ -21,7 +45,7 @@ from agent.schemas import AnalysisRunRequest
 from agent.voice_context import load_voice_transcript
 from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from agent.w2_gateway import workflow2_run
-from agent.w2_storage import load_file, load_manifest
+from agent.w2_storage import load_file, load_latest_run_for_pipe, load_manifest
 from data_utils import get_ai_response, get_distribution_watermains, get_pipes_uncached
 from real_data import get_real_pipes
 
@@ -165,19 +189,80 @@ def api_pipe_risk_summary(pipe_id: str, use_real: bool = True) -> dict:
     return result.model_dump()
 
 
-@app.post("/api/analysis-runs")
-async def api_create_analysis_run(body: AnalysisRunRequest) -> dict:
-    """Workflow 2: four-role analysis + synthesis (Nemotron Super)."""
+def _demo_cache_enabled() -> bool:
+    return os.getenv("W2_DEMO_CACHE", "true").lower() in ("1", "true", "yes")
+
+
+def _demo_cache_delay() -> float:
     try:
-        result = await workflow2_run(
+        return float(os.getenv("W2_DEMO_CACHE_DELAY", "60"))
+    except ValueError:
+        return 60.0
+
+
+async def _sleep_with_disconnect(seconds: float, request: Request, pipe_id: str) -> None:
+    """Sleep up to `seconds`, aborting early if the client disconnects."""
+    deadline = asyncio.get_event_loop().time() + seconds
+    while asyncio.get_event_loop().time() < deadline:
+        if await request.is_disconnected():
+            logging.getLogger("agent.w2_gateway").info(
+                "Workflow 2 client disconnected during demo cache replay for pipe %s",
+                pipe_id,
+            )
+            raise asyncio.CancelledError
+        await asyncio.sleep(0.5)
+
+
+@app.post("/api/analysis-runs")
+async def api_create_analysis_run(body: AnalysisRunRequest, request: Request) -> dict:
+    """Workflow 2: four-role analysis + synthesis (Nemotron Super)."""
+    if _demo_cache_enabled():
+        cached = load_latest_run_for_pipe(body.pipe_id)
+        if cached is not None:
+            delay = _demo_cache_delay()
+            logging.getLogger("agent.w2_gateway").info(
+                "Workflow 2 demo cache hit for pipe %s (run_id=%s); "
+                "replaying after %.0fs",
+                body.pipe_id,
+                cached.get("run_id"),
+                delay,
+            )
+            try:
+                await _sleep_with_disconnect(delay, request, body.pipe_id)
+            except asyncio.CancelledError:
+                raise
+            return cached
+
+    task = asyncio.create_task(
+        workflow2_run(
             body.pipe_id,
             use_real=body.use_real,
             use_latest_voice_transcript=body.use_latest_voice_transcript,
             transcript_path=body.transcript_path,
         )
+    )
+    try:
+        while not task.done():
+            if await request.is_disconnected():
+                logging.getLogger("agent.w2_gateway").info(
+                    "Workflow 2 client disconnected; cancelling pipe %s",
+                    body.pipe_id,
+                )
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+                raise asyncio.CancelledError
+            await asyncio.sleep(0.5)
+        result = await task
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
+        logging.getLogger("agent.w2_gateway").exception(
+            "Workflow 2 failed for pipe %s",
+            body.pipe_id,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to run multi-role analysis: {exc}",

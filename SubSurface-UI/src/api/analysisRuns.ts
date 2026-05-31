@@ -5,7 +5,10 @@ import type {
 } from "../types/analysisRun";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const W2_TIMEOUT_MS = 900_000;
+const W2_TIMEOUT_MS = Number(
+  import.meta.env.VITE_WORKFLOW2_TIMEOUT_MS ?? 1_800_000,
+);
+const W2_TIMEOUT_MINUTES = Math.round(W2_TIMEOUT_MS / 60_000);
 
 async function parseError(res: Response, fallback: string): Promise<string> {
   const body = await res.text().catch(() => "");
@@ -37,10 +40,13 @@ export async function fetchWorkflow2Health(): Promise<Workflow2Health> {
 
 export async function createAnalysisRun(
   request: AnalysisRunRequest,
+  signal?: AbortSignal,
 ): Promise<AnalysisRunResponse> {
   const url = `${API_BASE}/api/analysis-runs`;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), W2_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
 
   let res: Response;
   try {
@@ -57,13 +63,17 @@ export async function createAnalysisRun(
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("Workflow 2 timed out after 15 minutes.");
+      if (signal?.aborted) {
+        throw new Error("Workflow 2 analysis was cancelled.");
+      }
+      throw new Error(`Workflow 2 timed out after ${W2_TIMEOUT_MINUTES} minutes.`);
     }
     throw new Error(
       "Cannot reach Workflow 2 API. Start the SubSurface backend on port 8000.",
     );
   } finally {
     window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 
   if (!res.ok) {

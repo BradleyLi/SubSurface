@@ -26,6 +26,9 @@ start_server() {
     return 0
   fi
   echo "Starting Ollama ${label} on :${port}"
+  # Serve the 4 Workflow-2 analysis roles concurrently (shared weights,
+  # per-slot KV cache) instead of queuing them. Override per run if needed.
+  export OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-4}"
   OLLAMA_HOST="127.0.0.1:${port}" "${OLLAMA_BIN}" serve &
   if [[ "${port}" == "11434" ]]; then
     PID_W2=$!

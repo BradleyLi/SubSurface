@@ -190,6 +190,10 @@ class AnalysisPacket(BaseModel):
     constraints: AnalysisConstraints = Field(default_factory=AnalysisConstraints)
     caller_report: CallerReport | None = None
 
+    @property
+    def pipe_id(self) -> str:
+        return self.assets[0].pipe_id
+
 
 class RoleReport(BaseModel):
     role: RoleName

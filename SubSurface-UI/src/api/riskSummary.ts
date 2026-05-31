@@ -5,13 +5,17 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 export async function fetchRiskSummary(
   pipeId: string,
   useReal = true,
+  signal?: AbortSignal,
 ): Promise<RiskSummaryResponse> {
   const url = `${API_BASE}/api/pipes/${encodeURIComponent(pipeId)}/risk-summary?use_real=${useReal}`;
 
   let res: Response;
   try {
-    res = await fetch(url);
-  } catch {
+    res = await fetch(url, { signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
     throw new Error(
       "Cannot reach Workflow 1 summary API. Start the SubSurface backend on port 8000.",
     );

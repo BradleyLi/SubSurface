@@ -28,17 +28,19 @@ export default function SummaryAgent({ pipe, useReal = true }: SummaryAgentProps
     }
 
     const pipeId = pipe.pipe_id;
+    const controller = new AbortController();
     let cancelled = false;
 
     setState({ status: "loading", pipeId });
 
-    fetchRiskSummary(pipeId, useReal)
+    fetchRiskSummary(pipeId, useReal, controller.signal)
       .then((data) => {
         if (cancelled) return;
         setState({ status: "ready", pipeId, data });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const message =
           err instanceof Error ? err.message : "Failed to load risk summary.";
         setState({ status: "error", pipeId, message });
@@ -46,6 +48,7 @@ export default function SummaryAgent({ pipe, useReal = true }: SummaryAgentProps
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [pipe?.pipe_id, useReal]);
 

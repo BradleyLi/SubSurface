@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
+export CITYNERVE_LOG_LEVEL="${CITYNERVE_LOG_LEVEL:-INFO}"
 
 if [[ -f "$ROOT/.env" ]]; then
   set -a
@@ -77,6 +79,7 @@ import sys
 
 port = int(sys.argv[1])
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     sock.bind(("0.0.0.0", port))
 except OSError:
@@ -535,6 +538,14 @@ start_ollama_server() {
   fi
 
   echo "Starting Ollama ${label} on :${port}"
+  export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-24h}"
+  export OLLAMA_MAX_LOADED_MODELS="${OLLAMA_MAX_LOADED_MODELS:-1}"
+  # Serve the 4 Workflow-2 analysis roles (engineer/police/field/operations)
+  # concurrently from one loaded model instead of queuing them one slot at a
+  # time. Ollama splits the model's KV cache into this many slots (shared
+  # weights, per-slot KV). The GB10's unified memory (~111 GiB) easily fits the
+  # model weights plus 4 KV slots. Override per run, e.g. OLLAMA_NUM_PARALLEL=2.
+  export OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-4}"
   OLLAMA_HOST="127.0.0.1:${port}" "${OLLAMA_BIN}" serve &
   if [[ "${port}" == "${OLLAMA_W2_PORT}" ]]; then
     PID_W2=$!
@@ -596,6 +607,7 @@ require_port_available "${FASTAPI_PORT}" "FASTAPI"
 require_port_available "${UI_PORT}" "UI"
 resolve_voice_chat_port
 require_distinct_ports
+export VITE_VOICE_CHAT_PORT="${VOICE_CHAT_PORT}"
 
 if [[ ! -d "${UI_DIR}" ]]; then
   echo "ERROR: React UI not found at ${UI_DIR}" >&2
@@ -622,13 +634,15 @@ echo "==> Starting FastAPI (uvicorn)"
 "$PYTHON" -m uvicorn backend.main:app --host 127.0.0.1 --port "${FASTAPI_PORT}" &
 PID_UVICORN=$!
 
-echo "==> Starting React UI (Vite → API ${VITE_API_PROXY_TARGET})"
+wait_for_started_service "${PID_UVICORN}" "${FASTAPI_PORT}" "FastAPI" 30
+start_voice_service
+export VITE_VOICE_CHAT_PORT="${VOICE_CHAT_PORT}"
+
+echo "==> Starting React UI (Vite → API ${VITE_API_PROXY_TARGET}, voice :${VOICE_CHAT_PORT})"
 (cd "${UI_DIR}" && npm run dev -- --host "${UI_HOST}" --port "${UI_PORT}") &
 PID_UI=$!
 
-wait_for_started_service "${PID_UVICORN}" "${FASTAPI_PORT}" "FastAPI" 30
 wait_for_started_service "${PID_UI}" "${UI_PORT}" "React UI (Vite)" 60
-start_voice_service
 
 cat <<EOF
 
