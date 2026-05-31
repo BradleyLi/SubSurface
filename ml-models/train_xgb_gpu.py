@@ -260,9 +260,9 @@ except Exception:
     dtest = xgb.DMatrix(X_test.to_pandas(), label=y_test.to_pandas())
 
 params = {
-    'tree_method': 'gpu_hist',
+    'tree_method': 'hist',
     'predictor': 'gpu_predictor',
-    'gpu_id': args.gpu_id,
+    'device': f'cuda',
     'objective': 'binary:logistic',
     'eval_metric': ['auc', 'aucpr', 'logloss'],
     'eta': args.learning_rate,
@@ -277,15 +277,31 @@ params = {
     'verbosity': 1
 }
 
-logger.info('Starting xgboost.train on GPU')
-bst = xgb.train(
-    params,
-    dtrain,
-    num_boost_round=args.n_estimators,
-    evals=[(dtrain, 'train'), (dval, 'val')],
-    early_stopping_rounds=50,
-    verbose_eval=100
-)
+# GPU-only training: attempt GPU train and error if GPU not available / not supported
+logger.info('Starting xgboost.train with GPU params (GPU-only mode)')
+try:
+    bst = xgb.train(
+        params,
+        dtrain,
+        num_boost_round=args.n_estimators,
+        evals=[(dtrain, 'train'), (dval, 'val')],
+        early_stopping_rounds=50,
+        verbose_eval=100
+    )
+    logger.info('Trained with GPU settings')
+except Exception as e:
+    # Provide actionable error for GPU setup
+    msg = (
+        'GPU training failed. This script requires a GPU-enabled XGBoost build and a CUDA-capable environment. '
+        'Caught exception: {}\n'.format(e) +
+        'Checklist:\n'
+        ' - Is CUDA available and visible to this process? (nvidia-smi)\n'
+        ' - Is xgboost built with GPU support? Install a GPU wheel or use conda (see https://xgboost.readthedocs.io/en/stable/gpu/index.html)\n'
+        ' - Ensure RAPIDS/cuDF and cupy are installed and compatible with your CUDA version.\n'
+        'XGBoost error details: {}'
+    ).format(type(e).__name__, str(e))
+    logger.error(msg)
+    raise RuntimeError(msg)
 
 logger.info('Best iteration: %s', getattr(bst, 'best_iteration', None))
 
@@ -314,20 +330,15 @@ print('Metrics:', metrics_out)
 
 # save model
 model_path = MODELS_DIR / 'xgb_model.json'
-model.save_model(str(model_path))
+bst.save_model(str(model_path))
 print('Saved model to', model_path)
-
-# feature importance
-fi = pd.DataFrame({'feature': FEATURES, 'importance': model.feature_importances_})
-fi = fi.sort_values('importance', ascending=False)
-fi.to_csv(MODELS_DIR / 'feature_importance.csv', index=False)
 
 # SHAP
 print('Computing SHAP...')
 sample_size = min(args.sample_shap, len(X_test))
 if sample_size > 0:
     X_shap = X_test.head(sample_size).to_pandas()
-    explainer = shap.TreeExplainer(model)
+    explainer = shap.TreeExplainer(bst)
     shap_vals = explainer.shap_values(X_shap)
     mean_abs_shap = np.abs(shap_vals).mean(axis=0)
     shap_df = pd.DataFrame({'feature': FEATURES, 'mean_abs_shap': mean_abs_shap})
