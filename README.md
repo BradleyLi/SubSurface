@@ -60,7 +60,7 @@ Voice only (separate from Streamlit/FastAPI):
 ./scripts/run_voice_chat.sh
 ```
 
-Open **http://127.0.0.1:8503/client/** — allow the browser microphone, **hold** the mic button to speak, **release** to send (local Whisper STT). Click **End call** to write the transcript JSON under `voice_sessions/` (nothing is saved before end call).
+Open **http://127.0.0.1:8503/client/** locally, or **http://<server-ip>:8503/client/** from another machine — allow the browser microphone, **hold** the mic button to speak, **release** to send (local Whisper STT). Click **End call** to write the transcript JSON under `voice_sessions/` (nothing is saved before end call). Streamlit pages subscribe to transcript events on the same hostname that served the frontend, port `8503`, unless `VOICE_TRANSCRIPT_EVENTS_URL` is set.
 
 Verify Ollama: `./agent/scripts/check_endpoints.sh`
 
@@ -75,6 +75,11 @@ Standalone **CityNerve Reporting Line** — simulates a live watermain-break cal
 - Python venv with `pip install -r requirements.txt`
 - Ollama running for the chosen workflow (default **Workflow 1** on `:11436`; set `VOICE_LLM_PROFILE=workflow2` for W2 on `:11434`)
 - Firefox or another browser with microphone access
+
+GX10/GB10 note: if voice transcription fails with
+`This CTranslate2 package was not compiled with CUDA support`, the
+`linux-aarch64` Python environment needs the local CUDA-enabled CTranslate2
+build documented in [agent/README.md](agent/README.md#gx10-faster-whisper-cuda-setup).
 
 **During the call**
 

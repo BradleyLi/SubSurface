@@ -5,6 +5,9 @@ __pycache__/
 *.pyd
 .Python
 
+# Local build artifacts (ctranslate2, python dev headers, etc.)
+.build/
+
 # Virtual environments
 venv/
 venv_packages/

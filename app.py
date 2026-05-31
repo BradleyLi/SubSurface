@@ -29,9 +29,11 @@ from frontend.report import (
     build_order_report_view_model,
     build_work_order_text,
 )
+from frontend.voice_events import render_voice_transcript_rerun_listener
 from frontend.workflow1_ui import render_pipe_summaries_panel
 
 inject_css()
+render_voice_transcript_rerun_listener(key="overview_voice_transcript_events")
 
 # ── Session state defaults ─────────────────────────────────────────────────
 for _k, _v in [

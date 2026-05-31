@@ -120,6 +120,12 @@ Standalone **CityNerve Reporting Line** (`agent/harness/voice_bot.py`) — not p
    .venv/bin/pip install -r requirements.txt
    ```
 
+   On this GX10/GB10 machine (`linux-aarch64`), the PyPI `ctranslate2`
+   wheel can install as CPU-only. If voice transcription fails with
+   `This CTranslate2 package was not compiled with CUDA support`, rebuild
+   `ctranslate2` from source with CUDA enabled. See
+   [GX10 faster-whisper CUDA setup](#gx10-faster-whisper-cuda-setup).
+
 2. **Ollama** running for the profile you will use (check with `./agent/scripts/check_endpoints.sh`):
 
    | `VOICE_LLM_PROFILE` | Ollama port | Model |
@@ -142,9 +148,13 @@ export PYTHONPATH="$(pwd)"
 .venv/bin/python agent/harness/voice_bot.py
 ```
 
+Prefer `./scripts/run_voice_chat.sh` on the GX10. It adds the local
+CTranslate2, CUDA, and cuDNN library paths needed by the CUDA-enabled
+`ctranslate2` build.
+
 The server prints the client URL, transcript directory, LLM profile, and TTS engine on startup. Default client URL:
 
-**http://127.0.0.1:8503/client/**
+**http://0.0.0.0:8503/client/** (open it from another machine as `http://<server-ip>:8503/client/`)
 
 Override host/port with `VOICE_CHAT_HOST`, `VOICE_CHAT_PORT`, or CLI flags `--host` / `--port`.
 
@@ -179,14 +189,16 @@ The transcript contains caller and agent turns (no system prompt), session metad
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VOICE_CHAT_HOST` | `127.0.0.1` | Bind address |
+| `VOICE_CHAT_HOST` | `0.0.0.0` | Bind address |
 | `VOICE_CHAT_PORT` | `8503` | HTTP port |
+| `VOICE_TRANSCRIPT_EVENTS_URL` | same hostname as Streamlit, port `8503` | Browser SSE URL for transcript-created rerenders |
 | `VOICE_LLM_PROFILE` | `workflow1` | `workflow1` or `workflow2` |
 | `VOICE_OUTPUT_DIR` | `voice_sessions` | Transcript output directory |
 | `VOICE_MAX_USER_TURNS` | `3` | Max caller exchanges |
 | `VOICE_MAX_TOKENS` | `3000` | LLM reply token limit |
 | `VOICE_WHISPER_MODEL` | `base.en` | faster-whisper model |
-| `VOICE_WHISPER_DEVICE` | `auto` | Whisper device (`cpu`, `cuda`, `auto`) |
+| `VOICE_WHISPER_DEVICE` | `cuda` | Whisper device (`cpu`, `cuda`, `auto`) |
+| `VOICE_WHISPER_COMPUTE_TYPE` | `float16` | faster-whisper compute type |
 | `VOICE_MODEL_CACHE_DIR` | `voice_models` | Whisper/Kokoro download cache |
 | `VOICE_TTS_ENGINE` | `none` | `kokoro`, `piper`, or `none` |
 | `VOICE_TTS_VOICE` | `af_heart` | Kokoro voice id |
@@ -216,6 +228,101 @@ The server synthesizes each reply to a temporary WAV, serves it to the browser, 
 - **Ollama errors** — confirm the profile's port is up: `./agent/scripts/check_endpoints.sh`
 - **CUDA OOM** — set `VOICE_TTS_DEVICE=cpu` and/or `VOICE_WHISPER_DEVICE=cpu`
 - **No hold audio** — hold clips require TTS enabled (`VOICE_TTS_ENGINE=kokoro` or `piper`); otherwise the browser falls back to Web Speech API text-to-speech
+- **`This CTranslate2 package was not compiled with CUDA support`** — on this
+  GX10/GB10 (`linux-aarch64`) setup, rebuild CTranslate2 with CUDA enabled as
+  described below.
+
+### GX10 faster-whisper CUDA setup
+
+The voice line uses `faster-whisper`, which uses `ctranslate2` underneath.
+On x86_64, PyPI commonly provides a CUDA-enabled `ctranslate2` wheel. On this
+machine (`linux-aarch64`, NVIDIA GB10), a plain `pip install -r requirements.txt`
+can replace the working build with a CPU-only wheel. The symptom is:
+
+```text
+ValueError: This CTranslate2 package was not compiled with CUDA support
+```
+
+Check the current environment:
+
+```bash
+./.venv/bin/python - <<'PY'
+import ctranslate2
+
+print("ctranslate2", ctranslate2.__version__)
+for device in ["cpu", "cuda"]:
+    try:
+        print(device, ctranslate2.get_supported_compute_types(device))
+    except Exception as exc:
+        print(device, type(exc).__name__ + ":", exc)
+PY
+```
+
+If `cuda` raises that error, rebuild and install CTranslate2 locally:
+
+```bash
+# From repo root.
+mkdir -p .build/ctranslate2-cuda .build/python312-dev/debs .build/python312-dev/root
+
+# Get Python 3.12 headers without requiring sudo.
+cd .build/python312-dev/debs
+apt-get download python3.12-dev libpython3.12-dev
+for deb in *.deb; do dpkg-deb -x "$deb" ../root; done
+cd ../../..
+
+# Clone and build CTranslate2 with CUDA/cuDNN.
+cd .build/ctranslate2-cuda
+if [ ! -d CTranslate2 ]; then
+  git clone --recursive --branch v4.7.2 https://github.com/OpenNMT/CTranslate2.git
+fi
+CUDNN_ROOT="$PWD/../../.venv/lib/python3.12/site-packages/nvidia/cudnn"
+cmake -S CTranslate2 -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$PWD/install" \
+  -DWITH_CUDA=ON \
+  -DWITH_CUDNN=ON \
+  -DWITH_MKL=OFF \
+  -DWITH_OPENBLAS=OFF \
+  -DWITH_RUY=ON \
+  -DOPENMP_RUNTIME=COMP \
+  -DCUDA_ARCH_LIST="8.6+PTX" \
+  -DCUDNN_INCLUDE_DIR="$CUDNN_ROOT/include" \
+  -DCUDNN_LIBRARIES="$CUDNN_ROOT/lib/libcudnn.so.9"
+cmake --build build --parallel 4
+cmake --install build
+
+# Build and install the Python wrapper into this project's venv.
+cd CTranslate2/python
+PYDEV="$(pwd)/../../../python312-dev/root"
+CT2_ROOT="$(pwd)/../../install"
+INC="-I$PYDEV/usr/include/python3.12 -I$PYDEV/usr/include"
+/home/asus/Desktop/SubSurface/.venv/bin/python -m pip install -r install_requirements.txt
+rm -rf build dist
+CTRANSLATE2_ROOT="$CT2_ROOT" \
+  CFLAGS="$INC" \
+  CPPFLAGS="$INC" \
+  LDFLAGS="-L$PYDEV/usr/lib/aarch64-linux-gnu -Wl,-rpath,$CT2_ROOT/lib" \
+  /home/asus/Desktop/SubSurface/.venv/bin/python setup.py bdist_wheel
+/home/asus/Desktop/SubSurface/.venv/bin/python -m pip install --force-reinstall dist/*.whl
+```
+
+`scripts/run_voice_chat.sh` prepends the required library paths at startup:
+
+- `.build/ctranslate2-cuda/install/lib`
+- `/usr/local/cuda/lib64`
+- `.venv/lib/python3.12/site-packages/nvidia/cudnn/lib`
+
+Verify the final setup:
+
+```bash
+LD_LIBRARY_PATH=".build/ctranslate2-cuda/install/lib:.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}" \
+  ./.venv/bin/python - <<'PY'
+from faster_whisper import WhisperModel
+
+model = WhisperModel("base.en", device="cuda", compute_type="float16", download_root="voice_models")
+print("WhisperModel CUDA load OK")
+PY
+```
 
 ## Ports
 

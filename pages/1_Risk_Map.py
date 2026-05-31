@@ -25,8 +25,10 @@ from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from api_client import get_pipes_api, get_workflow2_health_api, post_analysis_run_api
 from data_utils  import get_shap, RISK_COLORS
 from frontend.nav import render_top_nav, w2_session_key
+from frontend.voice_events import render_voice_transcript_rerun_listener
 
 inject_css()
+render_voice_transcript_rerun_listener(key="risk_map_voice_transcript_events")
 
 use_real = render_top_nav("risk_map")
 df = get_pipes_api(use_real=use_real)

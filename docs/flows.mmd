@@ -1,0 +1,34 @@
+sequenceDiagram
+    autonumber
+    actor Caller
+    actor Engineer
+    participant Voice as Voice Bot :8503
+    participant W1 as Ollama W1
+    participant FS as voice_sessions/
+    participant UI as Streamlit :8501
+    participant API as FastAPI :8000
+    participant GW2 as w2_gateway
+    participant W2 as Ollama W2
+
+    Note over Caller,W1: Voice intake (independent service)
+    Caller->>Voice: Hold-to-talk audio
+    Voice->>Voice: faster-whisper STT
+    Voice->>W1: chat (Nemotron Nano)
+    W1-->>Voice: agent reply (+ optional TTS)
+    Caller->>Voice: End call
+    Voice->>FS: write voice_transcript_*.json
+
+    Note over Engineer,W2: Analyst reviews & runs deep analysis
+    Engineer->>UI: open Risk Map
+    UI->>API: GET /api/pipes
+    API-->>UI: pipe DataFrame (Toronto + ML risk)
+    UI->>FS: find_pipe_for_latest_transcript()
+    FS-->>UI: matched pipe -> map overlay
+    Engineer->>UI: Run multi-role analysis
+    UI->>API: POST /api/analysis-runs
+    API->>GW2: workflow2_run(pipe_id)
+    GW2->>W2: transcript orchestrator + procurement
+    GW2->>W2: 4 role reports (parallel) + synthesis
+    W2-->>GW2: role reports + action plan + BOM
+    GW2->>GW2: save to data/analysis_runs/
+    GW2-->>UI: structured result -> UI tabs

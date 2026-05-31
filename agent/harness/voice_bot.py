@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -36,7 +37,8 @@ load_dotenv(_REPO_ROOT / "agent" / ".env")
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agent.harness.client import chat
@@ -167,8 +169,8 @@ def _configure_model_caches() -> None:
 
 _configure_model_caches()
 _WHISPER_MODEL_NAME = os.getenv("VOICE_WHISPER_MODEL", "base.en")
-_WHISPER_DEVICE = os.getenv("VOICE_WHISPER_DEVICE", "cuda")
-_WHISPER_COMPUTE_TYPE = os.getenv("VOICE_WHISPER_COMPUTE_TYPE", "default")
+_WHISPER_DEVICE = os.getenv("VOICE_WHISPER_DEVICE", "cuda").strip().lower()
+_WHISPER_COMPUTE_TYPE = os.getenv("VOICE_WHISPER_COMPUTE_TYPE", "float16").strip().lower()
 _VOICE_TTS_ENGINE = os.getenv("VOICE_TTS_ENGINE", "none").strip().lower()
 _VOICE_TTS_VOICE = os.getenv("VOICE_TTS_VOICE", "af_heart")
 _VOICE_TTS_LANG_CODE = os.getenv("VOICE_TTS_LANG_CODE", "a")
@@ -204,6 +206,10 @@ def _hold_message_text(turn: int) -> str:
     if key == 2:
         return _HOLD_MESSAGE_TURN2
     return _HOLD_MESSAGE_TURN3
+
+
+def _server_tts_enabled() -> bool:
+    return _VOICE_TTS_ENGINE not in {"", "none", "off", "disabled"}
 
 
 def _hold_message_path(turn: int) -> Path:
@@ -248,8 +254,25 @@ class EndSessionRequest(BaseModel):
 
 
 app = FastAPI(title="CityNerve Reporting Line")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 _sessions: dict[str, VoiceSession] = {}
 _session_lock = asyncio.Lock()
+_transcript_subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
+
+
+def _broadcast_transcript_event(payload: dict[str, Any]) -> None:
+    """Notify connected Streamlit browser listeners that a call transcript landed."""
+    for queue in list(_transcript_subscribers):
+        try:
+            queue.put_nowait(payload)
+        except asyncio.QueueFull:
+            logger.warning("Dropping transcript UI event for a slow subscriber")
+            _transcript_subscribers.discard(queue)
 
 
 def _cleanup_ephemeral_tts_files() -> None:
@@ -569,7 +592,49 @@ def root() -> RedirectResponse:
 
 @app.get("/client/", response_class=HTMLResponse, include_in_schema=False)
 def client() -> str:
-    return _CLIENT_HTML
+    return _CLIENT_HTML.replace(
+        "__HOLD_MESSAGES_JSON__",
+        json.dumps(
+            {
+                1: _HOLD_MESSAGE_TURN1,
+                2: _HOLD_MESSAGE_TURN2,
+                3: _HOLD_MESSAGE_TURN3,
+            }
+        ),
+    ).replace(
+        "__SERVER_HOLD_AUDIO_ENABLED__",
+        "true" if _server_tts_enabled() else "false",
+    )
+
+
+@app.get("/api/transcript-events")
+async def api_transcript_events() -> StreamingResponse:
+    """Server-sent events for Streamlit pages that should rerender on new calls."""
+
+    async def stream():
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=10)
+        _transcript_subscribers.add(queue)
+        try:
+            yield ": connected\n\n"
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                yield f"event: transcript\ndata: {json.dumps(payload)}\n\n"
+        finally:
+            _transcript_subscribers.discard(queue)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/chat")
@@ -634,6 +699,14 @@ async def api_end(body: EndSessionRequest) -> dict:
         base_url=endpoint.base_url,
     )
     logger.info("Transcript saved on end call: {}", path)
+    transcript_event = {
+        "type": "voice_transcript_created",
+        "session_id": session.session_id,
+        "transcript_path": str(path),
+        "filename": path.name,
+        "mtime_ns": path.stat().st_mtime_ns,
+    }
+    _broadcast_transcript_event(transcript_event)
     return {
         "session_id": session.session_id,
         "path": str(path),
@@ -927,11 +1000,8 @@ _CLIENT_HTML = r"""
     const avatarEl = document.getElementById("avatar");
     const toggleTranscript = document.getElementById("toggleTranscript");
     const toggleTranscriptBtn = document.getElementById("toggleTranscriptBtn");
-    const HOLD_MESSAGES = {
-      1: "I'm looking into this, let me get back to you in a moment.",
-      2: "Ok, let me note that down, please wait",
-      3: "Ok, we're almost done here, please bear with me.",
-    };
+    const HOLD_MESSAGES = __HOLD_MESSAGES_JSON__;
+    const SERVER_HOLD_AUDIO_ENABLED = __SERVER_HOLD_AUDIO_ENABLED__;
     function holdTurnKey(turn) {
       if (turn <= 1) return 1;
       if (turn >= 3) return 3;
@@ -1006,6 +1076,7 @@ _CLIENT_HTML = r"""
       return "/api/hold-audio?turn=" + holdTurnKey(turn);
     }
     async function probeHoldAudio(turn) {
+      if (!SERVER_HOLD_AUDIO_ENABLED) return false;
       const t = holdTurnKey(turn);
       if (t in holdAudioAvailable) return holdAudioAvailable[t];
       try {
@@ -1257,9 +1328,11 @@ _CLIENT_HTML = r"""
     talk.addEventListener("click", toggleRecording);
     end.addEventListener("click", endSession);
     unlockAudio();
-    probeHoldAudio(1);
-    probeHoldAudio(2);
-    probeHoldAudio(3);
+    if (SERVER_HOLD_AUDIO_ENABLED) {
+      probeHoldAudio(1);
+      probeHoldAudio(2);
+      probeHoldAudio(3);
+    }
   </script>
 </body>
 </html>
@@ -1268,7 +1341,7 @@ _CLIENT_HTML = r"""
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CityNerve Reporting Line")
-    parser.add_argument("--host", default=os.getenv("VOICE_CHAT_HOST", "127.0.0.1"))
+    parser.add_argument("--host", default=os.getenv("VOICE_CHAT_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = parser.parse_args()
 

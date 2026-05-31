@@ -1,0 +1,117 @@
+flowchart TB
+    subgraph clients["Clients (Browser)"]
+        direction LR
+        BrowserUI["Streamlit Dashboard<br/>(rendered HTML/Plotly)"]
+        VoiceUI["Voice Reporting Line UI<br/>(embedded HTML + vanilla JS,<br/>MediaRecorder + fetch)"]
+    end
+
+    subgraph streamlit["Streamlit UI · :8501 (app.py + pages/)"]
+        direction TB
+        Pages["Pages: Risk Map · Decision Engine ·<br/>Cascade Sim · AI Assistant · Watermains"]
+        FE["frontend/ helpers<br/>nav · workflow1_ui · report · order_report_ui"]
+        Styles["app_styles.py (injected CSS)"]
+        APIClient["api_client.py<br/>(urllib → REST, in-process fallback)"]
+        VoiceMatch["agent/voice_pipe_match.py<br/>(transcript → pipe overlay)"]
+        Pages --> FE --> APIClient
+        Pages --> VoiceMatch
+    end
+
+    subgraph backend["FastAPI Backend · :8000 (backend/main.py)"]
+        direction TB
+        Health["/health, /health/workflow1|2"]
+        PipesAPI["/api/pipes, /api/watermains-layer"]
+        W1API["/api/pipes/{id}/risk-summary (W1)"]
+        W2API["/api/analysis-runs (W2)"]
+        AIAPI["/api/ai-response (rule-based)"]
+    end
+
+    subgraph agent["Agent Layer"]
+        direction TB
+        GW1["gateway.py · Workflow 1<br/>evidence → JSON summary"]
+        GW2["w2_gateway.py · Workflow 2<br/>4 roles + synthesis"]
+        Orch["w2_orchestrator.py<br/>(transcript triage)"]
+        Proc["procurement/<br/>catalog · selection · BOM"]
+        Schemas["schemas.py (Pydantic contracts)"]
+        GW2 --> Orch
+        GW2 --> Proc
+    end
+
+    subgraph harness["Harness (shared LLM infra)"]
+        direction LR
+        Client["client.py (async httpx)"]
+        Endpoints["endpoints.py · settings.py"]
+        HealthChk["health.py"]
+    end
+
+    subgraph voice["Voice Bot · :8503 (agent/harness/voice_bot.py)"]
+        direction TB
+        VBApi["/api/chat-audio, /api/chat,<br/>/api/end, /api/tts-audio"]
+        Whisper["faster-whisper (local STT)"]
+        TTS["Kokoro / Piper TTS (optional)"]
+        VT["voice_transcript.py<br/>(JSON + location extraction)"]
+        VBApi --> Whisper
+        VBApi --> TTS
+        VBApi --> VT
+    end
+
+    subgraph llm["Dual Ollama (local LLM)"]
+        direction LR
+        OllamaW1["W1 · :11436<br/>nemotron-nano:12b-v2"]
+        OllamaW2["W2 · :11434<br/>nemotron-3-super"]
+    end
+
+    subgraph stores["File-based Persistence"]
+        direction LR
+        VS[("voice_sessions/*.json")]
+        AR[("data/analysis_runs/")]
+        MLP[("ml-models/.structured-data/<br/>predictions *.jsonl")]
+        ProcData[("data/procurement/*.json")]
+        Geo[("neighbourhoods geojson")]
+    end
+
+    subgraph external["External (runtime)"]
+        direction LR
+        CKAN["Toronto Open Data<br/>(CKAN GeoJSON)"]
+        HF["Hugging Face Hub<br/>(Whisper/Kokoro weights)"]
+    end
+
+    subgraph mlpipe["ML Pipeline (offline · conda RAPIDS)"]
+        direction LR
+        DL["download_data.py"] --> Parquet["build_structured_parquet.py"]
+        Parquet --> Train["train_xgb_gpu.py"]
+        Train --> Predict["predict_xgb_gpu.py"]
+    end
+
+    BrowserUI -->|HTTP| streamlit
+    VoiceUI -->|fetch multipart/JSON| VBApi
+
+    APIClient -->|REST JSON| backend
+
+    PipesAPI --> DataLayer["data_utils · real_data · ml_predictions"]
+    W1API --> GW1
+    W2API --> GW2
+
+    GW1 --> Client
+    GW2 --> Client
+    Orch --> Client
+    Proc --> Client
+    HealthChk --> OllamaW1
+    Client --> OllamaW1
+    Client --> OllamaW2
+    Client --> Endpoints
+
+    VBApi --> Client
+
+    DataLayer --> CKAN
+    DataLayer --> MLP
+    Whisper -.first use.-> HF
+    TTS -.first use.-> HF
+    Proc --> ProcData
+    VoiceMatch --> Geo
+
+    VT --> VS
+    VoiceMatch -.reads.-> VS
+    GW2 --> AR
+    Predict --> MLP
+    Predict -.offline.-> CKAN
+    DataLayer -.fallback in-process.-> agent
