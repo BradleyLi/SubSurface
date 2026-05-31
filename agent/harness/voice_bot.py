@@ -1014,12 +1014,20 @@ _CLIENT_HTML = r"""
     let stream = null;
     let holding = false;
     let sending = false;
+    let startAfterSend = false;
     let recordingStartedAt = 0;
     let currentAudio = null;
     let holdAudio = null;
     const holdAudioAvailable = {};
     let callEnded = false;
     const MIN_CLIENT_AUDIO_BYTES = 2048;
+    const MIN_AUDIO_PEAK_RMS = 0.01;
+    const MIN_AUDIO_AVG_RMS = 0.0025;
+    let audioContext = null;
+    let audioSource = null;
+    let audioAnalyser = null;
+    let audioMonitorFrame = 0;
+    let audioLevelStats = null;
 
     function setCallState(state, text) {
       statusEl.textContent = text;
@@ -1049,6 +1057,55 @@ _CLIENT_HTML = r"""
     function describeBytes(bytes) {
       if (bytes < 1024) return bytes + " bytes";
       return (bytes / 1024).toFixed(1) + " KB";
+    }
+    function resetAudioLevelStats() {
+      audioLevelStats = { samples: 0, rmsTotal: 0, peakRms: 0 };
+    }
+    function audioLevelSummary() {
+      if (!audioLevelStats || audioLevelStats.samples === 0) {
+        return { samples: 0, avgRms: 0, peakRms: 0 };
+      }
+      return {
+        samples: audioLevelStats.samples,
+        avgRms: audioLevelStats.rmsTotal / audioLevelStats.samples,
+        peakRms: audioLevelStats.peakRms
+      };
+    }
+    function stopAudioLevelMonitor() {
+      if (audioMonitorFrame) {
+        cancelAnimationFrame(audioMonitorFrame);
+        audioMonitorFrame = 0;
+      }
+    }
+    async function startAudioLevelMonitor(mic) {
+      resetAudioLevelStats();
+      stopAudioLevelMonitor();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!audioContext) {
+        audioContext = new AudioContextClass();
+        audioSource = audioContext.createMediaStreamSource(mic);
+        audioAnalyser = audioContext.createAnalyser();
+        audioAnalyser.fftSize = 2048;
+        audioSource.connect(audioAnalyser);
+      }
+      if (audioContext.state === "suspended") await audioContext.resume();
+      const samples = new Float32Array(audioAnalyser.fftSize);
+      const sampleLevels = () => {
+        audioAnalyser.getFloatTimeDomainData(samples);
+        let sumSquares = 0;
+        for (const value of samples) sumSquares += value * value;
+        const rms = Math.sqrt(sumSquares / samples.length);
+        audioLevelStats.samples += 1;
+        audioLevelStats.rmsTotal += rms;
+        audioLevelStats.peakRms = Math.max(audioLevelStats.peakRms, rms);
+        if (holding) audioMonitorFrame = requestAnimationFrame(sampleLevels);
+      };
+      audioMonitorFrame = requestAnimationFrame(sampleLevels);
+    }
+    function audioLooksSilent(levels, durationMs) {
+      if (durationMs < 700 || !levels.samples) return false;
+      return levels.peakRms < MIN_AUDIO_PEAK_RMS && levels.avgRms < MIN_AUDIO_AVG_RMS;
     }
     function stopPlayback() {
       if (!currentAudio) return;
@@ -1176,9 +1233,9 @@ _CLIENT_HTML = r"""
       } : "none");
       return stream;
     }
-    async function sendAudio(blob, durationMs) {
+    async function sendAudio(blob, durationMs, levels) {
       if (!blob || blob.size === 0 || sending || callEnded) return;
-      console.info("Recorded audio clip", { bytes: blob.size, durationMs });
+      console.info("Recorded audio clip", { bytes: blob.size, durationMs, levels });
       if (blob.size < MIN_CLIENT_AUDIO_BYTES) {
         setCallState("connected", "No audio captured");
         setCaption(
@@ -1190,8 +1247,20 @@ _CLIENT_HTML = r"""
         );
         return;
       }
+      if (audioLooksSilent(levels, durationMs)) {
+        setCallState("connected", "No speech captured");
+        setCaption(
+          "",
+          "The microphone level stayed very low for " +
+            (durationMs / 1000).toFixed(1) +
+            "s. Check the selected microphone, speak close to it, then click Start and try again.",
+          ""
+        );
+        return;
+      }
       sending = true;
-      talk.disabled = true;
+      startAfterSend = false;
+      setTalkLabel("Wait");
       processingTurn += 1;
       const holdPlayback = playHoldMessage(processingTurn);
       try {
@@ -1218,13 +1287,28 @@ _CLIENT_HTML = r"""
         setCaption("", err.message, "");
         avatarEl.classList.remove("speaking");
       } finally {
-        talk.disabled = callEnded;
-        if (!callEnded) setTalkLabel("Start");
         sending = false;
+        talk.disabled = callEnded;
+        if (!callEnded && startAfterSend) {
+          startAfterSend = false;
+          setTalkLabel("Start");
+          await startRecording();
+        } else if (!callEnded) {
+          setTalkLabel("Start");
+        }
+      }
+    }
+    function toggleQueuedStart(ev) {
+      if (ev) ev.preventDefault();
+      startAfterSend = !startAfterSend;
+      setTalkLabel(startAfterSend ? "Queued" : "Wait");
+      setCallState("busy", startAfterSend ? "Will listen next" : "One moment...");
+      if (startAfterSend) {
+        setCaption("", "I'll start listening as soon as this response is ready.", "");
       }
     }
     async function startRecording(ev) {
-      ev.preventDefault();
+      if (ev) ev.preventDefault();
       if (callEnded) return;
       if (!navigator.mediaDevices || !window.MediaRecorder) {
         setCallState("connected", "Microphone unavailable");
@@ -1253,11 +1337,14 @@ _CLIENT_HTML = r"""
           const type = recorder.mimeType || mimeType || "audio/ogg";
           const blob = new Blob(chunks, { type });
           const durationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
+          const levels = audioLevelSummary();
           recordingStartedAt = 0;
-          sendAudio(blob, durationMs);
+          stopAudioLevelMonitor();
+          sendAudio(blob, durationMs, levels);
         };
         holding = true;
         recordingStartedAt = Date.now();
+        await startAudioLevelMonitor(mic);
         talk.classList.add("recording");
         setTalkLabel("Send");
         setCallState("recording", "Listening...");
@@ -1265,6 +1352,11 @@ _CLIENT_HTML = r"""
         recorder.start(250);
       } catch (err) {
         console.error(err);
+        holding = false;
+        recordingStartedAt = 0;
+        stopAudioLevelMonitor();
+        talk.classList.remove("recording");
+        setTalkLabel("Start");
         setCallState("connected", "Microphone error");
       }
     }
@@ -1272,6 +1364,7 @@ _CLIENT_HTML = r"""
       if (ev) ev.preventDefault();
       if (!holding) return;
       holding = false;
+      stopAudioLevelMonitor();
       talk.classList.remove("recording");
       setTalkLabel("Start");
       if (recorder && recorder.state !== "inactive") {
@@ -1284,6 +1377,8 @@ _CLIENT_HTML = r"""
     function toggleRecording(ev) {
       if (holding) {
         stopRecording(ev);
+      } else if (sending) {
+        toggleQueuedStart(ev);
       } else {
         startRecording(ev);
       }
@@ -1293,6 +1388,7 @@ _CLIENT_HTML = r"""
       stopAllPlayback();
       if (holding) {
         holding = false;
+        stopAudioLevelMonitor();
         talk.classList.remove("recording");
         setTalkLabel("Start");
         if (recorder && recorder.state !== "inactive") recorder.stop();
