@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-from app_styles import inject_css, section_title, risk_badge
+from app_styles import begin_filter_panel, inject_css, section_title, risk_badge
 from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from api_client import get_pipes_api, post_analysis_run_api
 from frontend.nav import w2_session_key
@@ -101,7 +101,7 @@ map_col, filter_col = st.columns([3, 1], gap="medium")
 
 # ── Filter panel ───────────────────────────────────────────────────────────
 with filter_col:
-    st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
+    begin_filter_panel()
     section_title("Map Filters")
 
     _mat_options = sorted(df["material"].unique())
@@ -147,18 +147,6 @@ with filter_col:
     else:
         type_filter = pipe_types_available or ["Synthetic"]
         color_mode  = "Risk Level"
-
-    st.divider()
-    section_title("Legend")
-    for lvl, col in RISK_COLORS.items():
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:.5rem;margin:.2rem 0">'
-            f'<div style="width:10px;height:10px;border-radius:50%;background:{col};flex-shrink:0"></div>'
-            f'<span style="font-size:.78rem;color:#8faabf">{lvl}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Apply map filters ──────────────────────────────────────────────────────
 mask = (

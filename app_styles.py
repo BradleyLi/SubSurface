@@ -128,8 +128,8 @@ footer { visibility: hidden; }
     margin-left: 0.2rem;
 }
 
-/* ── Filter panel ── */
-.filter-panel {
+/* ── Filter panel (marker in column; widgets can't share one HTML wrapper in Streamlit) ── */
+[data-testid="column"]:has([data-filter-panel]) > [data-testid="stVerticalBlock"] {
     background: #07101f;
     border: 1px solid #162033;
     border-radius: 10px;
@@ -137,8 +137,11 @@ footer { visibility: hidden; }
     position: sticky;
     top: 4rem;
 }
-.filter-panel .section-title {
+[data-testid="column"]:has([data-filter-panel]) .section-title {
     margin-bottom: 0.6rem;
+}
+[data-filter-panel] {
+    display: none;
 }
 
 /* ── Quick-select pill buttons ── */
@@ -594,6 +597,14 @@ def page_header(title: str, subtitle: str, badge: str = "") -> None:
             <div class="cn-tagline">{subtitle}</div>
         </div>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def begin_filter_panel() -> None:
+    """Mark a column for filter-panel styling (see inject_css filter-panel rules)."""
+    st.markdown(
+        '<span data-filter-panel aria-hidden="true"></span>',
         unsafe_allow_html=True,
     )
 
