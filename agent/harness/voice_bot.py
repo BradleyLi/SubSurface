@@ -52,6 +52,7 @@ The call has at most 3 exchanges (caller speaks, you respond — three times tot
 
 Capture location (address or intersection), injuries or people at risk, and damage (flooding, road closure, vehicles stuck, etc.) when the caller provides them.
 If someone may be seriously injured or in immediate danger, tell them to call 911 immediately, then keep noting details.
+Never infer or invent incident details. If the caller did not provide a location, say you still need the location.
 Keep each reply to 1-3 short sentences. Use plain language; stay calm and professional.
 Reply in plain text only: no markdown, no asterisks, no bullet lists, no headings.
 Do not start with labels like "Agent:" or "Assistant:" — speak directly to the caller.
@@ -71,6 +72,17 @@ _ROLE_ONLY_LINE_RE = re.compile(
 
 _VOICE_MAX_TOKENS = int(os.getenv("VOICE_MAX_TOKENS", "3000"))
 _VOICE_MAX_USER_TURNS = int(os.getenv("VOICE_MAX_USER_TURNS", "3"))
+_VOICE_MIN_AUDIO_BYTES = int(os.getenv("VOICE_MIN_AUDIO_BYTES", "2048"))
+_VOICE_NO_SPEECH_THRESHOLD = float(os.getenv("VOICE_NO_SPEECH_THRESHOLD", "0.6"))
+_VOICE_JUNK_TRANSCRIPTS = {
+    "you",
+    "yeah",
+    "yes",
+    "no",
+    "uh",
+    "um",
+    "hmm",
+}
 _CLOSING_REPLY = (
     "Thank you. I have recorded your report and am passing it to emergency services now. "
     "If anyone is in immediate danger, please stay on the line or call 911."
@@ -102,6 +114,14 @@ def _plain_voice_reply(text: str) -> str:
     cleaned = _AGENT_LABEL_RE.sub("", cleaned)
     cleaned = re.sub(r"\*+", "", cleaned)
     return cleaned.strip()
+
+
+def _is_low_information_transcript(text: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9'\s]", "", text.lower()).strip()
+    if not normalized:
+        return True
+    words = normalized.split()
+    return len(words) == 1 and normalized in _VOICE_JUNK_TRANSCRIPTS
 
 
 def _user_turn_count(messages: list[dict[str, str]]) -> int:
@@ -147,7 +167,7 @@ def _configure_model_caches() -> None:
 
 _configure_model_caches()
 _WHISPER_MODEL_NAME = os.getenv("VOICE_WHISPER_MODEL", "base.en")
-_WHISPER_DEVICE = os.getenv("VOICE_WHISPER_DEVICE", "auto")
+_WHISPER_DEVICE = os.getenv("VOICE_WHISPER_DEVICE", "cuda")
 _WHISPER_COMPUTE_TYPE = os.getenv("VOICE_WHISPER_COMPUTE_TYPE", "default")
 _VOICE_TTS_ENGINE = os.getenv("VOICE_TTS_ENGINE", "none").strip().lower()
 _VOICE_TTS_VOICE = os.getenv("VOICE_TTS_VOICE", "af_heart")
@@ -161,7 +181,7 @@ _HOLD_MESSAGE_TURN1 = os.getenv(
 ).strip()
 _HOLD_MESSAGE_TURN2 = os.getenv(
     "VOICE_HOLD_MESSAGE_LATER",
-    "Ok, let me note that down.",
+    "Ok, let me note that down, please wait.",
 ).strip()
 _HOLD_MESSAGE_TURN3 = os.getenv(
     "VOICE_HOLD_MESSAGE_TURN3",
@@ -188,6 +208,10 @@ def _hold_message_text(turn: int) -> str:
 
 def _hold_message_path(turn: int) -> Path:
     return _VOICE_TTS_OUTPUT_DIR / f"hold_message_turn{_hold_turn_key(turn)}.wav"
+
+
+def _hold_message_text_path(turn: int) -> Path:
+    return _VOICE_TTS_OUTPUT_DIR / f"hold_message_turn{_hold_turn_key(turn)}.txt"
 
 
 def _voice_llm_profile() -> WorkflowProfile:
@@ -297,9 +321,9 @@ def _transcribe_audio_file(path: Path) -> str:
         str(path),
         language="en",
         beam_size=5,
-        vad_filter=False,
-        no_speech_threshold=1.0,
-        log_prob_threshold=None,
+        vad_filter=True,
+        no_speech_threshold=_VOICE_NO_SPEECH_THRESHOLD,
+        condition_on_previous_text=False,
     )
     text = " ".join(segment.text.strip() for segment in segments).strip()
     logger.info(
@@ -315,6 +339,18 @@ def _transcribe_audio_file(path: Path) -> str:
         )
         shutil.copy2(path, debug_path)
         logger.warning("Empty transcript; saved audio clip for inspection: {}", debug_path)
+    elif _is_low_information_transcript(text):
+        _VOICE_DEBUG_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        debug_path = _VOICE_DEBUG_AUDIO_DIR / (
+            datetime.now(timezone.utc).strftime("junk_%Y%m%dT%H%M%SZ") + path.suffix
+        )
+        shutil.copy2(path, debug_path)
+        logger.warning(
+            "Low-information transcript {!r}; saved audio clip for inspection: {}",
+            text,
+            debug_path,
+        )
+        return ""
     return text
 
 
@@ -436,18 +472,26 @@ def _ensure_hold_message_audio(turn: int = 1) -> Path | None:
     if _VOICE_TTS_ENGINE in {"", "none", "off", "disabled"}:
         return None
     path = _hold_message_path(turn)
-    if path.exists() and path.stat().st_size > 0:
-        return path
-
     text = _hold_message_text(turn)
+    text_path = _hold_message_text_path(turn)
+    if path.exists() and path.stat().st_size > 0:
+        try:
+            if text_path.read_text(encoding="utf-8") == text:
+                return path
+        except OSError:
+            pass
+
     _VOICE_TTS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("Synthesizing hold message (turn {}): {!r}", turn, text)
+    tmp_path = path.with_name(f"{path.stem}_{uuid4().hex}.tmp{path.suffix}")
     if _VOICE_TTS_ENGINE == "kokoro":
-        _synthesize_with_kokoro(text, path)
+        _synthesize_with_kokoro(text, tmp_path)
     elif _VOICE_TTS_ENGINE == "piper":
-        _synthesize_with_piper(text, path)
+        _synthesize_with_piper(text, tmp_path)
     else:
         return None
+    tmp_path.replace(path)
+    text_path.write_text(text, encoding="utf-8")
     return path
 
 
@@ -543,9 +587,21 @@ async def api_chat_audio(
     audio: UploadFile = File(...),
 ) -> dict:
     suffix = _audio_suffix(audio.content_type)
+    audio_bytes = await audio.read()
+    if len(audio_bytes) < _VOICE_MIN_AUDIO_BYTES:
+        logger.warning(
+            "Audio clip too small for transcription: {} bytes ({})",
+            len(audio_bytes),
+            suffix,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="No usable audio was recorded. Click Start, speak, then click Send.",
+        )
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = Path(tmp.name)
-        tmp.write(await audio.read())
+        tmp.write(audio_bytes)
 
     try:
         user_text = await asyncio.to_thread(_transcribe_audio_file, tmp_path)
@@ -837,7 +893,7 @@ _CLIENT_HTML = r"""
     <section class="avatar-wrap">
       <div id="avatar" class="avatar" aria-hidden="true">CN</div>
       <div id="caption" class="caption">
-        <span>Hold the microphone button to speak your report.</span>
+        <span>Click Start, speak your report, then click Send.</span>
       </div>
     </section>
 
@@ -849,7 +905,7 @@ _CLIENT_HTML = r"""
         </button>
         <button id="talk" type="button" aria-label="Hold to speak">
           <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
-          Hold
+          <span id="talkLabel">Start</span>
         </button>
         <button id="toggleTranscriptBtn" class="call-btn" type="button" aria-label="Show transcript">
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2z"/></svg>
@@ -863,6 +919,7 @@ _CLIENT_HTML = r"""
 
   <script>
     const talk = document.getElementById("talk");
+    const talkLabel = document.getElementById("talkLabel");
     const end = document.getElementById("end");
     const statusEl = document.getElementById("status");
     const logEl = document.getElementById("log");
@@ -887,10 +944,12 @@ _CLIENT_HTML = r"""
     let stream = null;
     let holding = false;
     let sending = false;
+    let recordingStartedAt = 0;
     let currentAudio = null;
     let holdAudio = null;
     const holdAudioAvailable = {};
     let callEnded = false;
+    const MIN_CLIENT_AUDIO_BYTES = 2048;
 
     function setCallState(state, text) {
       statusEl.textContent = text;
@@ -913,6 +972,13 @@ _CLIENT_HTML = r"""
       } else {
         setCaption("Agent", text, "agent");
       }
+    }
+    function setTalkLabel(text) {
+      talkLabel.textContent = text;
+    }
+    function describeBytes(bytes) {
+      if (bytes < 1024) return bytes + " bytes";
+      return (bytes / 1024).toFixed(1) + " KB";
     }
     function stopPlayback() {
       if (!currentAudio) return;
@@ -1013,20 +1079,46 @@ _CLIENT_HTML = r"""
     }
     function pickMimeType() {
       const candidates = [
-        "audio/ogg;codecs=opus",
         "audio/webm;codecs=opus",
-        "audio/ogg",
-        "audio/webm"
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/ogg"
       ];
       return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
     }
     async function ensureMicStream() {
       if (stream) return stream;
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      const [track] = stream.getAudioTracks();
+      console.info("Microphone track", track ? {
+        label: track.label,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+        settings: track.getSettings ? track.getSettings() : {}
+      } : "none");
       return stream;
     }
-    async function sendAudio(blob) {
+    async function sendAudio(blob, durationMs) {
       if (!blob || blob.size === 0 || sending || callEnded) return;
+      console.info("Recorded audio clip", { bytes: blob.size, durationMs });
+      if (blob.size < MIN_CLIENT_AUDIO_BYTES) {
+        setCallState("connected", "No audio captured");
+        setCaption(
+          "",
+          "Recorded only " + describeBytes(blob.size) + " over " +
+            (durationMs / 1000).toFixed(1) +
+            "s. Check the browser microphone input, then click Start and try again.",
+          ""
+        );
+        return;
+      }
       sending = true;
       talk.disabled = true;
       processingTurn += 1;
@@ -1034,7 +1126,7 @@ _CLIENT_HTML = r"""
       try {
         const form = new FormData();
         form.append("session_id", sessionId);
-        form.append("audio", blob, "speech.ogg");
+        form.append("audio", blob, blob.type.includes("webm") ? "speech.webm" : "speech.ogg");
         const res = await fetch("/api/chat-audio", { method: "POST", body: form });
         stopHoldPlayback();
         await holdPlayback.catch(() => {});
@@ -1056,6 +1148,7 @@ _CLIENT_HTML = r"""
         avatarEl.classList.remove("speaking");
       } finally {
         talk.disabled = callEnded;
+        if (!callEnded) setTalkLabel("Start");
         sending = false;
       }
     }
@@ -1071,36 +1164,68 @@ _CLIENT_HTML = r"""
       unlockAudio();
       try {
         const mic = await ensureMicStream();
+        const [track] = mic.getAudioTracks();
+        if (!track || track.readyState !== "live") {
+          throw new Error("No live microphone input is available");
+        }
         chunks = [];
         const mimeType = pickMimeType();
         recorder = new MediaRecorder(mic, mimeType ? { mimeType } : undefined);
         recorder.ondataavailable = (event) => {
+          console.info("Recorder data chunk", event.data ? event.data.size : 0);
           if (event.data && event.data.size > 0) chunks.push(event.data);
+        };
+        recorder.onerror = (event) => {
+          console.error("Recorder error", event.error || event);
         };
         recorder.onstop = () => {
           const type = recorder.mimeType || mimeType || "audio/ogg";
           const blob = new Blob(chunks, { type });
-          sendAudio(blob);
+          const durationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
+          recordingStartedAt = 0;
+          sendAudio(blob, durationMs);
         };
         holding = true;
+        recordingStartedAt = Date.now();
         talk.classList.add("recording");
+        setTalkLabel("Send");
         setCallState("recording", "Listening...");
-        recorder.start();
+        setCaption("", "Recording... click Send when you are done speaking.", "");
+        recorder.start(250);
       } catch (err) {
         console.error(err);
         setCallState("connected", "Microphone error");
       }
     }
     function stopRecording(ev) {
-      ev.preventDefault();
+      if (ev) ev.preventDefault();
       if (!holding) return;
       holding = false;
       talk.classList.remove("recording");
-      if (recorder && recorder.state !== "inactive") recorder.stop();
+      setTalkLabel("Start");
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          recorder.requestData();
+        } catch {}
+        recorder.stop();
+      }
+    }
+    function toggleRecording(ev) {
+      if (holding) {
+        stopRecording(ev);
+      } else {
+        startRecording(ev);
+      }
     }
     async function endSession() {
       if (callEnded) return;
       stopAllPlayback();
+      if (holding) {
+        holding = false;
+        talk.classList.remove("recording");
+        setTalkLabel("Start");
+        if (recorder && recorder.state !== "inactive") recorder.stop();
+      }
       callEnded = true;
       talk.disabled = true;
       setCallState("busy", "Ending call...");
@@ -1129,10 +1254,7 @@ _CLIENT_HTML = r"""
     }
     toggleTranscript.addEventListener("click", toggleLog);
     toggleTranscriptBtn.addEventListener("click", toggleLog);
-    talk.addEventListener("pointerdown", startRecording);
-    talk.addEventListener("pointerup", stopRecording);
-    talk.addEventListener("pointercancel", stopRecording);
-    talk.addEventListener("pointerleave", (ev) => { if (holding) stopRecording(ev); });
+    talk.addEventListener("click", toggleRecording);
     end.addEventListener("click", endSession);
     unlockAudio();
     probeHoldAudio(1);

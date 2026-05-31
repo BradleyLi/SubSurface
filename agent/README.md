@@ -138,7 +138,7 @@ Override host/port with `VOICE_CHAT_HOST`, `VOICE_CHAT_PORT`, or CLI flags `--ho
 While waiting for the model, the browser plays a short hold message:
 
 - **Turn 1:** *"I'm looking into this, let me get back to you in a moment."*
-- **Turn 2:** *"Ok, let me note that down."*
+- **Turn 2:** *"Ok, let me note that down, please wait."*
 - **Turn 3:** *"Ok, we're almost done here, please bear with me."*
 
 Customize via `VOICE_HOLD_MESSAGE`, `VOICE_HOLD_MESSAGE_LATER`, and `VOICE_HOLD_MESSAGE_TURN3` in `.env`.
@@ -151,7 +151,7 @@ Customize via `VOICE_HOLD_MESSAGE`, `VOICE_HOLD_MESSAGE_LATER`, and `VOICE_HOLD_
 | Reply TTS WAV | During call (playback only) | `voice_sessions/tts_audio/reply_*.wav` — ephemeral, gitignored, cleaned on server restart |
 | Hold-message cache | First use | `voice_sessions/tts_audio/hold_message_turn*.wav` — gitignored |
 
-The transcript contains caller and agent turns (no system prompt), session metadata, and model info. See `agent/harness/voice_transcript.py`.
+The transcript contains caller and agent turns (no system prompt), session metadata, model info, and an `incident.location` block when a spoken Toronto intersection can be mapped. See `agent/harness/voice_transcript.py`.
 
 ### Environment variables
 
