@@ -220,18 +220,8 @@ def _hold_message_text_path(turn: int) -> Path:
     return _VOICE_TTS_OUTPUT_DIR / f"hold_message_turn{_hold_turn_key(turn)}.txt"
 
 
-def _voice_llm_profile() -> WorkflowProfile:
-    raw = os.getenv("VOICE_LLM_PROFILE", "workflow1").strip().lower()
-    if raw in {"workflow1", "w1", "1"}:
-        return WorkflowProfile.WORKFLOW1
-    if raw in {"workflow2", "w2", "2"}:
-        return WorkflowProfile.WORKFLOW2
-    raise ValueError(
-        f"Invalid VOICE_LLM_PROFILE={raw!r}; use workflow1, workflow2, w1, or w2"
-    )
-
-
-_VOICE_LLM_PROFILE = _voice_llm_profile()
+# Live calls stay on Workflow 1. Workflow 2 is reserved for summary/report flows.
+_VOICE_LLM_PROFILE = WorkflowProfile.WORKFLOW1
 _whisper_model: Any | None = None
 _kokoro_pipeline: Any | None = None
 
@@ -1248,21 +1238,14 @@ _CLIENT_HTML = r"""
         return;
       }
       if (audioLooksSilent(levels, durationMs)) {
-        setCallState("connected", "No speech captured");
-        setCaption(
-          "",
-          "The microphone level stayed very low for " +
-            (durationMs / 1000).toFixed(1) +
-            "s. Check the selected microphone, speak close to it, then click Start and try again.",
-          ""
-        );
-        return;
+        console.warn("Recorded audio level looked low; sending to Whisper anyway", levels);
       }
       sending = true;
       startAfterSend = false;
       setTalkLabel("Wait");
-      processingTurn += 1;
-      const holdPlayback = playHoldMessage(processingTurn);
+      let retryAfterNoSpeech = false;
+      const attemptedTurn = processingTurn + 1;
+      const holdPlayback = playHoldMessage(attemptedTurn);
       try {
         const form = new FormData();
         form.append("session_id", sessionId);
@@ -1272,6 +1255,7 @@ _CLIENT_HTML = r"""
         await holdPlayback.catch(() => {});
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
+        processingTurn = attemptedTurn;
         addMessage("user", data.text);
         addMessage("agent", data.response);
         if (data.audio_url) {
@@ -1283,13 +1267,19 @@ _CLIENT_HTML = r"""
       } catch (err) {
         stopHoldPlayback();
         console.error(err);
-        setCallState("connected", "Error — try again");
-        setCaption("", err.message, "");
+        const message = err.message || "";
+        retryAfterNoSpeech = message.includes("No speech detected") || message.includes("No usable audio");
+        setCallState("connected", retryAfterNoSpeech ? "Didn't catch that" : "Error — try again");
+        setCaption(
+          "",
+          retryAfterNoSpeech ? "I didn't catch that clearly. Listening again..." : message,
+          ""
+        );
         avatarEl.classList.remove("speaking");
       } finally {
         sending = false;
         talk.disabled = callEnded;
-        if (!callEnded && startAfterSend) {
+        if (!callEnded && (retryAfterNoSpeech || startAfterSend)) {
           startAfterSend = false;
           setTalkLabel("Start");
           await startRecording();

@@ -18,6 +18,19 @@ cp .env.example .env
 ./scripts/run_citynerve.sh
 ```
 
+For the demo stack with FastAPI on `:9000`, run:
+
+```bash
+FASTAPI_PORT=9000 ./scripts/run_citynerve.sh
+```
+
+If a requested port is busy, the script automatically picks the next available
+port. Open the `Voice Reporting` URL printed in the startup banner, for example
+`http://localhost:8504/client/`.
+
+The Voice Reporting Line always uses Workflow 1. Workflow 2 is reserved for
+summary/report workflows.
+
 | Service | URL | Notes |
 |---------|-----|--------|
 | Streamlit UI | http://127.0.0.1:8501 | `app.py` + `pages/` — map, simulator, assistant |
@@ -73,7 +86,7 @@ Standalone **CityNerve Reporting Line** — simulates a live watermain-break cal
 **Prerequisites**
 
 - Python venv with `pip install -r requirements.txt`
-- Ollama running for the chosen workflow (default **Workflow 1** on `:11436`; set `VOICE_LLM_PROFILE=workflow2` for W2 on `:11434`)
+- Ollama Workflow 1 running on `:11436`; Workflow 2 is reserved for summary/report workflows
 - Firefox or another browser with microphone access
 
 GX10/GB10 note: if voice transcription fails with

@@ -126,12 +126,13 @@ Standalone **CityNerve Reporting Line** (`agent/harness/voice_bot.py`) — not p
    `ctranslate2` from source with CUDA enabled. See
    [GX10 faster-whisper CUDA setup](#gx10-faster-whisper-cuda-setup).
 
-2. **Ollama** running for the profile you will use (check with `./agent/scripts/check_endpoints.sh`):
+2. **Ollama Workflow 1** running for live calls (check with `./agent/scripts/check_endpoints.sh`):
 
-   | `VOICE_LLM_PROFILE` | Ollama port | Model |
+   | Voice call workflow | Ollama port | Model |
    |---------------------|-------------|-------|
-   | `workflow1` (default) | `:11436` | `nemotron-nano:12b-v2` |
-   | `workflow2` | `:11434` | `nemotron-3-super:latest` |
+   | Workflow 1 | `:11436` | `nemotron-nano:12b-v2` |
+
+   Workflow 2 (`nemotron-3-super:latest` on `:11434`) is reserved for summary/report workflows.
 
 3. **`.env`** at repo root — copy from `agent/.env.example` if needed. Voice-related keys are at the bottom of that file.
 
@@ -192,7 +193,6 @@ The transcript contains caller and agent turns (no system prompt), session metad
 | `VOICE_CHAT_HOST` | `0.0.0.0` | Bind address |
 | `VOICE_CHAT_PORT` | `8503` | HTTP port |
 | `VOICE_TRANSCRIPT_EVENTS_URL` | same hostname as Streamlit, port `8503` | Browser SSE URL for transcript-created rerenders |
-| `VOICE_LLM_PROFILE` | `workflow1` | `workflow1` or `workflow2` |
 | `VOICE_OUTPUT_DIR` | `voice_sessions` | Transcript output directory |
 | `VOICE_MAX_USER_TURNS` | `3` | Max caller exchanges |
 | `VOICE_MAX_TOKENS` | `3000` | LLM reply token limit |
