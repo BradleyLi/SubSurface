@@ -79,24 +79,6 @@ k5.metric("Avg Network Risk",    f"{avg_risk:.1f} / 100")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════════════════
-# SECTION 01 · RISK MAP
-# ════════════════════════════════════════════════════════════════════════════
-st.markdown(
-    '<div class="section-flow-header">'
-    '<span class="section-flow-num">01</span>'
-    '<span class="section-flow-title">Risk Map</span>'
-    '<span class="section-flow-sub"> · Pipe segments coloured by predicted 12-month break probability'
-    f'{_snapshot_suffix}</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.page_link(
-    "pages/1_Risk_Map.py",
-    label="Open full Risk Map (SHAP + multi-role W2)",
-    icon="🗺️",
-)
-
 map_col, filter_col = st.columns([3, 1], gap="medium")
 
 # ── Filter panel ───────────────────────────────────────────────────────────

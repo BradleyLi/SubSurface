@@ -10,7 +10,6 @@ import streamlit as st
 NAV_PAGES: list[dict[str, str]] = [
     {"id": "overview", "label": "Overview", "path": "app.py"},
     {"id": "risk_map", "label": "Risk Map", "path": "pages/1_Risk_Map.py"},
-    {"id": "decision", "label": "Decision Engine", "path": "pages/2_Decision_Engine.py"},
     {"id": "ai", "label": "AI Assistant", "path": "pages/4_AI_Assistant.py"},
     {"id": "watermains", "label": "Watermains", "path": "pages/5_Distribution_Watermain.py"},
 ]
@@ -31,7 +30,7 @@ def hide_sidebar() -> None:
 def render_top_nav(
     current: str,
     *,
-    show_data_toggle: bool = True,
+    show_data_toggle: bool = False,
     use_real_key: str = "use_real_data",
 ) -> bool:
     """
@@ -45,9 +44,15 @@ def render_top_nav(
     if use_real_key not in st.session_state:
         st.session_state[use_real_key] = True
 
-    logo_col, gap_col, *nav_cols, toggle_col = st.columns(
-        [2.6, 0.2] + [1.05] * len(NAV_PAGES) + [2.2]
-    )
+    if show_data_toggle:
+        logo_col, gap_col, *nav_cols, toggle_col = st.columns(
+            [2.6, 0.2] + [1.05] * len(NAV_PAGES) + [2.2]
+        )
+    else:
+        logo_col, gap_col, *nav_cols = st.columns(
+            [2.6, 0.2] + [1.05] * len(NAV_PAGES)
+        )
+        toggle_col = None
 
     with logo_col:
         st.markdown(
@@ -64,13 +69,13 @@ def render_top_nav(
             st.page_link(page["path"], label=label)
 
     use_real = st.session_state.get(use_real_key, True)
-    if show_data_toggle:
+    if show_data_toggle and toggle_col is not None:
         with toggle_col:
             use_real = st.toggle(
                 "Toronto + ML model",
                 value=use_real,
                 key=use_real_key,
-                help="Toronto Open Data geometry with XGBoost break-risk predictions (2016 snapshot)",
+                help="Toronto Open Data geometry with XGBoost break-risk predictions",
             )
 
     st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
