@@ -1,5 +1,5 @@
 """
-pages/3_Decision_Engine.py — Capital Works Priority Queue + Work Order Generator
+pages/2_Decision_Engine.py — Capital Works Priority Queue + Work Order Generator
 Ranks pipe segments by expected savings and generates Nemotron work orders.
 """
 
@@ -22,46 +22,12 @@ st.set_page_config(
 from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils  import RISK_COLORS
+from frontend.nav import render_top_nav
 
 inject_css()
 
-# ── Hide sidebar, use top nav ──────────────────────────────────────────────
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"]    { display: none !important; }
-    [data-testid="stSidebarNav"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-df = get_pipes_api(use_real=st.session_state.get("use_real_data", False))
-
-# ── Top Nav ───────────────────────────────────────────────────────────────────
-logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
-with logo_col:
-    st.markdown(
-        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
-        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
-        unsafe_allow_html=True,
-    )
-with nav1:
-    st.page_link("app.py", label="🏠 Overview")
-with nav2:
-    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
-with nav3:
-    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
-with nav4:
-    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
-with toggle_col:
-    st.toggle(
-        "🌐 Toronto Open Data",
-        value=st.session_state.get("use_real_data", False),
-        key="use_real_data",
-    )
-st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
+use_real = render_top_nav("decision")
+df = get_pipes_api(use_real=use_real)
 
 # Inline controls (were in sidebar)
 ctrl1, ctrl2, ctrl3 = st.columns([2, 2, 3], gap="medium")

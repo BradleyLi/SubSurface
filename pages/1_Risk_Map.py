@@ -21,54 +21,19 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title, risk_badge
-from api_client import get_pipes_api
+from api_client import get_pipes_api, get_workflow2_health_api, post_analysis_run_api
 from data_utils  import get_shap, RISK_COLORS
+from frontend.nav import render_top_nav, w2_session_key
 
 inject_css()
 
-# ── Hide sidebar, use top nav ──────────────────────────────────────────────
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"]    { display: none !important; }
-    [data-testid="stSidebarNav"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-use_real = st.session_state.get("use_real_data", False)
+use_real = render_top_nav("risk_map")
 df = get_pipes_api(use_real=use_real)
 
 pipe_types_available = sorted(df["pipe_type"].unique()) if "pipe_type" in df.columns else []
 has_layers = len(pipe_types_available) > 1
 TYPE_COLORS = {"Transmission": "#1de9b6", "Distribution": "#4fc3f7", "Synthetic": "#8faabf"}
 TYPE_WIDTHS = {"Transmission": 3.5, "Distribution": 1.8, "Synthetic": 2.0}
-
-# ── Top Nav ───────────────────────────────────────────────────────────────────
-logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
-with logo_col:
-    st.markdown(
-        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
-        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
-        unsafe_allow_html=True,
-    )
-with nav1:
-    st.page_link("app.py", label="🏠 Overview")
-with nav2:
-    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
-with nav3:
-    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
-with nav4:
-    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
-with toggle_col:
-    use_real_toggle = st.toggle(
-        "🌐 Toronto Open Data",
-        value=use_real,
-        key="use_real_data",
-    )
-st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
 # ── Filters now live in-page (see map_col / filter_col below) ─────────────────
 if has_layers:
@@ -438,5 +403,72 @@ with detail_col:
         st.plotly_chart(fig_shap, use_container_width=True,
                         config={"displayModeBar": False})
 
+        st.caption(
+            "Workflow 1 (Nemotron summaries) runs on the Overview → "
+            "Decision Engine **Why Failing Agent** panel when you select pipes in the queue."
+        )
+
+        # ── Workflow 2 multi-role analysis (Super) ───────────────────────────
+        st.markdown(
+            '<div class="section-title" style="margin-top:1.2rem">'
+            'Multi-Role Analysis '
+            '<span style="font-size:.65rem;color:#3d5a78;font-weight:400">'
+            '(Nemotron Super · W2)</span></div>',
+            unsafe_allow_html=True,
+        )
+        w2_health = get_workflow2_health_api()
+        w2_ok = w2_health.get("ok", False)
+        if not w2_ok:
+            st.caption(
+                f"Workflow 2 unavailable: {w2_health.get('detail', 'check Ollama :11434')}"
+            )
+
+        run_key = w2_session_key(selected_id)
+        if st.button(
+            "Run multi-role analysis (Super)",
+            disabled=not w2_ok,
+            key=f"btn_w2_{selected_id}",
+        ):
+            with st.spinner(
+                "Running Engineer, Police, Field, Operations, and synthesis on Super… "
+                "(may take several minutes)"
+            ):
+                try:
+                    st.session_state[run_key] = post_analysis_run_api(
+                        selected_id, use_real=use_real
+                    )
+                except Exception as exc:
+                    st.session_state.pop(run_key, None)
+                    st.error(f"Workflow 2 failed: {exc}")
+
+        w2_result = st.session_state.get(run_key)
+        if w2_result:
+            w2_source = w2_result.get("source", "unknown")
+            st.caption(
+                f"Run `{w2_result.get('run_id', '')}` · source: **{w2_source}** · "
+                f"model: `{w2_result.get('models', {}).get('workflow2', 'super')}`"
+            )
+            role_tabs = st.tabs(
+                ["Engineer", "Police", "Field", "Operations", "Final plan"]
+            )
+            roles_by_name = {r["role"]: r for r in w2_result.get("roles", [])}
+            tab_map = [
+                ("Engineer", "engineer"),
+                ("Police", "police"),
+                ("Field", "field"),
+                ("Operations", "operations"),
+            ]
+            for tab, (label, role_key) in zip(role_tabs[:4], tab_map):
+                with tab:
+                    report = roles_by_name.get(role_key, {})
+                    src = report.get("source", "")
+                    st.caption(f"{label} · {src}")
+                    st.markdown(report.get("markdown", "_No content_"))
+            with role_tabs[4]:
+                st.markdown(w2_result.get("final_markdown", ""))
+                plan = w2_result.get("action_plan", {})
+                with st.expander("Action plan (JSON)"):
+                    st.json(plan)
+
         if st.button("💥 Simulate Cascade Failure →"):
-            st.switch_page("pages/2_Cascade_Simulator.py")
+            st.switch_page("pages/3_Cascade_Simulator.py")

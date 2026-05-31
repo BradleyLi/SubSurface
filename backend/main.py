@@ -12,6 +12,12 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from agent.gateway import workflow1_summary
+from agent.harness.endpoints import WorkflowProfile
+from agent.harness.health import check_all, check_profile
+from agent.schemas import AnalysisRunRequest
+from agent.w2_gateway import workflow2_run
+from agent.w2_storage import load_file, load_manifest
 from data_utils import get_ai_response, get_distribution_watermains, get_pipes
 from real_data import get_real_pipes
 
@@ -27,8 +33,49 @@ def _to_records(df: pd.DataFrame) -> list[dict]:
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}
+async def health() -> dict:
+    profiles = await check_all()
+    w1 = next(p for p in profiles if p.profile is WorkflowProfile.WORKFLOW1)
+    return {
+        "status": "ok" if w1.ok else "degraded",
+        "llm_reachable": w1.ok,
+        "workflows": [
+            {
+                "profile": p.profile.value,
+                "ok": p.ok,
+                "model": p.model,
+                "base_url": p.base_url,
+                "detail": p.detail,
+            }
+            for p in profiles
+        ],
+    }
+
+
+@app.get("/health/workflow1")
+async def health_workflow1() -> dict:
+    p = await check_profile(WorkflowProfile.WORKFLOW1)
+    return {
+        "profile": p.profile.value,
+        "ok": p.ok,
+        "model": p.model,
+        "base_url": p.base_url,
+        "detail": p.detail,
+        "models_available": p.models_available,
+    }
+
+
+@app.get("/health/workflow2")
+async def health_workflow2() -> dict:
+    p = await check_profile(WorkflowProfile.WORKFLOW2)
+    return {
+        "profile": p.profile.value,
+        "ok": p.ok,
+        "model": p.model,
+        "base_url": p.base_url,
+        "detail": p.detail,
+        "models_available": p.models_available,
+    }
 
 
 @app.get("/api/pipes")
@@ -77,6 +124,63 @@ class AIRequest(BaseModel):
     use_real: bool = False
     focus_ward: str | None = None
     focus_material: str | None = None
+
+
+@app.get("/api/pipes/{pipe_id}/risk-summary")
+def api_pipe_risk_summary(pipe_id: str, use_real: bool = False) -> dict:
+    """Workflow 1: Nemotron JSON risk summary for a single pipe."""
+    try:
+        result = workflow1_summary(pipe_id, use_real=use_real)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate risk summary: {exc}",
+        ) from exc
+    return result.model_dump()
+
+
+@app.post("/api/analysis-runs")
+async def api_create_analysis_run(body: AnalysisRunRequest) -> dict:
+    """Workflow 2: four-role analysis + synthesis (Nemotron Super)."""
+    try:
+        result = await workflow2_run(body.pipe_id, use_real=body.use_real)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to run multi-role analysis: {exc}",
+        ) from exc
+    return result.model_dump()
+
+
+@app.get("/api/analysis-runs/{run_id}")
+def api_get_analysis_run(run_id: str) -> dict:
+    manifest = load_manifest(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail=f"Analysis run not found: {run_id}")
+    return manifest
+
+
+@app.get("/api/analysis-runs/{run_id}/files/{filename}")
+def api_get_analysis_run_file(run_id: str, filename: str) -> dict:
+    allowed = {
+        "engineer.md",
+        "police.md",
+        "field_investigation.md",
+        "operations.md",
+        "final_summary.md",
+        "action_plan.json",
+        "manifest.json",
+    }
+    if filename not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unknown file: {filename}")
+    content = load_file(run_id, filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+    return {"run_id": run_id, "filename": filename, "content": content}
 
 
 @app.post("/api/ai-response")

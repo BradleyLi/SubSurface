@@ -1,0 +1,292 @@
+# GX10 dual Nemotron inference cheatsheet
+
+Host: **gx10-d8c5** (NVIDIA GB10, ~128 GB unified memory)  
+Stack: **two Ollama daemons** + optional **NemoClaw** on Super only.
+
+| Instance | Port | Model | Who uses it |
+|----------|------|--------|-------------|
+| **A** | `127.0.0.1:11434` | `nemotron-3-super:latest` (~87–94 GB) | Your NemoClaw sandbox `nemotron-3-super` (via proxy **11435**) |
+| **B** | `127.0.0.1:11436` | `nemotron-nano:12b-v2` (~7.5 GB weights, ~18 GB loaded w/ context) | Teammates’ agentic / NemoClaw projects |
+
+Shared model store: **`/home/asus/.ollama/models`** (`OLLAMA_MODELS`).
+
+---
+
+## Quick health check
+
+```bash
+# Daemons listening
+ss -tlnp | grep -E '11434|11435|11436'
+
+# Models loaded in GPU (run per instance)
+OLLAMA_HOST=127.0.0.1:11434 ollama ps
+OLLAMA_HOST=127.0.0.1:11436 ollama ps
+
+# Installed tags
+OLLAMA_HOST=127.0.0.1:11434 ollama list
+OLLAMA_HOST=127.0.0.1:11436 ollama list
+
+# API view (optional: jq)
+curl -s http://127.0.0.1:11434/api/ps
+curl -s http://127.0.0.1:11436/api/ps
+```
+
+**Both models loaded** when each `ollama ps` shows a row and `nvidia-smi` lists **two** `ollama` compute processes (Super ~90 GB + 12B ~17 GB).
+
+---
+
+## Check VRAM / memory
+
+### `nvidia-smi` (process list)
+
+```bash
+nvidia-smi
+```
+
+On GB10, the top line may show **“Not Supported”** for memory totals; use the **Processes** table:
+
+- One `ollama` ~**89–90k MiB** → Super (11434)
+- One `ollama` ~**17–18k MiB** → 12B (11436)
+
+### Ollama-reported size
+
+```bash
+OLLAMA_HOST=127.0.0.1:11434 ollama ps   # SIZE column (e.g. 94 GB)
+OLLAMA_HOST=127.0.0.1:11436 ollama ps   # SIZE column (e.g. 18 GB)
+```
+
+### At 11436 server start (log line)
+
+When B starts, look for:
+
+`available="XX GiB"` — free unified memory **after** A is loaded. Need **~10+ GiB** for 12B Q4.
+
+---
+
+## First-time setup (or full rebuild)
+
+### 1. Models on disk (once)
+
+```bash
+export OLLAMA_MODELS=/home/asus/.ollama/models
+
+# Super (if missing)
+ollama pull nemotron-3-super:latest
+
+# 12B — pull GGUF + alias
+ollama pull hf.co/bartowski/nvidia_NVIDIA-Nemotron-Nano-12B-v2-GGUF:Q4_K_M
+
+cat > ~/Modelfile.nemotron-12b-v2 << 'EOF'
+FROM hf.co/bartowski/nvidia_NVIDIA-Nemotron-Nano-12B-v2-GGUF:Q4_K_M
+EOF
+
+export OLLAMA_HOST=127.0.0.1:11436
+export OLLAMA_MODELS=/home/asus/.ollama/models
+ollama create nemotron-nano:12b-v2 -f ~/Modelfile.nemotron-12b-v2
+```
+
+Always **`create` / `pull` on 11436** with the same `OLLAMA_MODELS` as the B daemon.
+
+### 2. Start instance A (Super) — terminal 1
+
+If NemoClaw already manages Ollama on **11434**, you may only need:
+
+```bash
+# Confirm default daemon
+curl -s http://127.0.0.1:11434/api/version
+```
+
+Otherwise:
+
+```bash
+export OLLAMA_HOST=127.0.0.1:11434
+export OLLAMA_MODELS=/home/asus/.ollama/models
+export OLLAMA_KEEP_ALIVE=24h
+export OLLAMA_MAX_LOADED_MODELS=1
+ollama serve
+```
+
+Preload Super:
+
+```bash
+OLLAMA_HOST=127.0.0.1:11434 ollama run nemotron-3-super:latest --keepalive 24h "ping"
+```
+
+NemoClaw proxy (**11435**) is separate; do not point teammates at 11434/11435 unless they should use **your** Super sandbox.
+
+### 3. Start instance B (12B) — terminal 2
+
+```bash
+export OLLAMA_HOST=127.0.0.1:11436
+export OLLAMA_MODELS=/home/asus/.ollama/models
+export OLLAMA_KEEP_ALIVE=24h
+export OLLAMA_MAX_LOADED_MODELS=1
+ollama serve
+```
+
+Preload 12B:
+
+```bash
+OLLAMA_HOST=127.0.0.1:11436 ollama run nemotron-nano:12b-v2 --keepalive 24h "ping"
+```
+
+**Note:** `--keepalive -1` fails on Ollama 0.23.x — use **`24h`** or **`2562047h`**, not `-1`.
+
+### 4. Verify both loaded
+
+```bash
+OLLAMA_HOST=127.0.0.1:11434 ollama ps
+OLLAMA_HOST=127.0.0.1:11436 ollama ps
+nvidia-smi
+```
+
+---
+
+## After reboot (minimal)
+
+1. Start **11434** `ollama serve` (or system service / NemoClaw may start it).
+2. Start **11436** `ollama serve` with `OLLAMA_MODELS` as above.
+3. Preload both models (`ollama run … --keepalive 24h`) or let first request load them.
+4. Start NemoClaw gateway / sandboxes if needed: `nemoclaw nemotron-3-super status`.
+
+---
+
+## Teammates: inference for their projects
+
+### Option A — SSH to GX10 and run on-host (simplest)
+
+They already SSH as their user (or shared `asus` — adjust as you do today).
+
+```bash
+# 12B only — do not use 11434 unless you intend to hit Super
+export OLLAMA_HOST=http://127.0.0.1:11436
+export OLLAMA_MODEL=nemotron-nano:12b-v2
+```
+
+**curl test:**
+
+```bash
+curl -s http://127.0.0.1:11436/api/chat -d '{
+  "model": "nemotron-nano:12b-v2",
+  "messages": [{"role": "user", "content": "Say OK"}],
+  "stream": false
+}'
+```
+
+**OpenAI-compatible clients** (many agent frameworks):
+
+```bash
+export OPENAI_API_BASE=http://127.0.0.1:11436/v1
+export OPENAI_API_KEY=ollama
+# model id: nemotron-nano:12b-v2
+```
+
+### Option B — SSH tunnel from laptop
+
+On **their** machine:
+
+```bash
+ssh -L 11436:127.0.0.1:11436 USER@gx10-d8c5
+```
+
+Then same env as above with `http://127.0.0.1:11436`.
+
+### Option C — New NemoClaw sandbox on 12B (full OpenClaw in OpenShell)
+
+On **GX10** (after B is up and model exists):
+
+```bash
+export OLLAMA_MODELS=/home/asus/.ollama/models
+NEMOCLAW_MODEL=nemotron-nano:12b-v2 nemoclaw onboard
+```
+
+During onboarding choose a **compatible OpenAI endpoint** (not default Local Ollama on 11434 unless you want Super):
+
+- Base URL: `http://127.0.0.1:11436/v1`
+- Model: `nemotron-nano:12b-v2`
+
+Or onboard with Local Ollama only if you temporarily point the wizard at 11436 (non-standard; **compatible-endpoint** is clearer).
+
+Give each teammate their own sandbox name and dashboard port from `nemoclaw list`.
+
+**Your** Super sandbox stays:
+
+```bash
+nemoclaw nemotron-3-super connect
+# dashboard: http://127.0.0.1:18790/  (confirm with nemoclaw list)
+```
+
+### Team `.env.example` (commit to repo)
+
+```bash
+# GX10 shared 12B inference — use SSH tunnel or run on gx10
+OLLAMA_HOST=http://127.0.0.1:11436
+OLLAMA_MODEL=nemotron-nano:12b-v2
+
+# OpenAI SDK style
+OPENAI_API_BASE=http://127.0.0.1:11436/v1
+OPENAI_API_KEY=ollama
+OPENAI_MODEL=nemotron-nano:12b-v2
+```
+
+---
+
+## Port map (do not confuse)
+
+| Port | Service |
+|------|---------|
+| **11434** | Ollama A — Super |
+| **11435** | NemoClaw auth proxy → 11434 (Bearer token; sandbox only) |
+| **11436** | Ollama B — 12B for team |
+| **18790** | Your NemoClaw Control UI (example; check `nemoclaw list`) |
+
+Teammates should use **11436** only unless you explicitly share Super.
+
+---
+
+## NemoClaw commands (reference)
+
+```bash
+nemoclaw list
+nemoclaw nemotron-3-super status
+nemoclaw nemotron-3-super connect          # then: openclaw tui
+nemoclaw nemotron-3-super dashboard-url --quiet
+
+# Switch model on an existing sandbox (swap, not dual-load)
+nemoclaw inference set --provider ollama-local --model <tag> --sandbox <name>
+```
+
+Docs: https://docs.nvidia.com/nemoclaw/latest/
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `pull model manifest: file does not exist` on `run nemotron-nano:12b-v2` | Run `ollama create` on **11436** with `OLLAMA_MODELS=/home/asus/.ollama/models`; or `pull` again on 11436. |
+| `no Modelfile or safetensors files found` | Create `~/Modelfile.nemotron-12b-v2` before `ollama create`. |
+| `missing unit in duration "-1"` | Use `--keepalive 24h`, not `-1`. |
+| Only one model in `nvidia-smi` | Preload the other instance; check both `ollama ps`. |
+| OOM loading 12B | Super uses ~94 GB; use **Q4_K_M** for 12B; lower `num_ctx`; ensure B uses 11436 not 11434. |
+| Tools return raw JSON in OpenClaw | Prefer native Ollama API; for NemoClaw see [tool-calling reliability](https://docs.nvidia.com/nemoclaw/latest/inference/tool-calling-reliability.html). |
+
+---
+
+## One-page copy-paste (daily ops)
+
+```bash
+# Status
+ss -tlnp | grep -E '11434|11436'
+OLLAMA_HOST=127.0.0.1:11434 ollama ps
+OLLAMA_HOST=127.0.0.1:11436 ollama ps
+nvidia-smi
+
+# Reload if idle
+OLLAMA_HOST=127.0.0.1:11434 ollama run nemotron-3-super:latest --keepalive 24h "ping"
+OLLAMA_HOST=127.0.0.1:11436 ollama run nemotron-nano:12b-v2 --keepalive 24h "ping"
+```
+
+---
+
+*Generated for gx10-d8c5 setup: dual Ollama 0.23.2, Super + Nemotron Nano 12B v2 (Q4_K_M).*
