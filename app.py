@@ -18,8 +18,7 @@ st.set_page_config(
 
 from app_styles import begin_filter_panel, inject_css, section_title, risk_badge
 from agent.voice_pipe_match import find_pipe_for_latest_transcript
-from api_client import get_pipes_api, post_analysis_run_api
-from frontend.nav import w2_session_key
+from api_client import get_pipes_api
 from data_utils import RISK_COLORS
 from model import failure_summary
 from frontend.nav import render_top_nav, reconcile_multiselect_filter
@@ -736,26 +735,6 @@ with tab1:
                         "(cached summaries are reused)…"
                     )
                     _voice_payload, voice_match = find_pipe_for_latest_transcript(df)
-                    if voice_match is not None:
-                        matched_id = voice_match.pipe_id
-                        sel_ids = set(sel_data["pipe_id"].astype(str))
-                        if matched_id in sel_ids:
-                            run_key = w2_session_key(matched_id)
-                            if not st.session_state.get(run_key):
-                                report_status.write(
-                                    f"Running Workflow 2 for caller-matched pipe "
-                                    f"{matched_id} (voice transcript)…"
-                                )
-                                try:
-                                    st.session_state[run_key] = post_analysis_run_api(
-                                        matched_id,
-                                        use_real=use_real,
-                                        use_latest_voice_transcript=True,
-                                    )
-                                except Exception as exc:
-                                    report_status.write(
-                                        f"Workflow 2 skipped for {matched_id}: {exc}"
-                                    )
                     vm = build_order_report_view_model(
                         sel_data,
                         budget=budget,
