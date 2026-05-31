@@ -22,6 +22,9 @@ fi
 OLLAMA_BIN="${OLLAMA_BIN:-ollama}"
 OLLAMA_MODELS="${OLLAMA_MODELS:-${HOME}/.ollama/models}"
 export OLLAMA_MODELS
+STREAMLIT_HOST="${STREAMLIT_HOST:-0.0.0.0}"
+VOICE_CHAT_HOST="${VOICE_CHAT_HOST:-0.0.0.0}"
+VOICE_CHAT_PORT="${VOICE_CHAT_PORT:-8503}"
 
 PID_W1=""
 PID_W2=""
@@ -162,11 +165,11 @@ echo "==> Starting FastAPI (uvicorn)"
 PID_UVICORN=$!
 
 echo "==> Starting Streamlit"
-"$PYTHON" -m streamlit run app.py --server.port 8501 --server.address 127.0.0.1 &
+"$PYTHON" -m streamlit run app.py --server.port 8501 --server.address "${STREAMLIT_HOST}" &
 PID_STREAMLIT=$!
 
 echo "==> Starting Voice Reporting Line"
-"$PYTHON" agent/harness/voice_bot.py &
+"$PYTHON" agent/harness/voice_bot.py --host "${VOICE_CHAT_HOST}" --port "${VOICE_CHAT_PORT}" &
 PID_VOICE=$!
 
 sleep 2
@@ -176,9 +179,9 @@ cat <<EOF
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    CityNerve Demo Stack Ready                    ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  Streamlit UI     http://127.0.0.1:8501                          ║
+║  Streamlit UI     http://${STREAMLIT_HOST}:8501                          ║
 ║  FastAPI docs     http://127.0.0.1:8000/docs                     ║
-║  Voice Reporting  http://127.0.0.1:8503/client/                  ║
+║  Voice Reporting  http://${VOICE_CHAT_HOST}:${VOICE_CHAT_PORT}/client/                  ║
 ║  Ollama W2        http://127.0.0.1:11434/v1  (Super)             ║
 ║  Ollama W1        http://127.0.0.1:11436/v1  (Nano 12B)          ║
 ╠══════════════════════════════════════════════════════════════════╣
