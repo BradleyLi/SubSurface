@@ -66,6 +66,10 @@ def read_watermains():
         'Watermain Location Description': 'location_desc'
     }
 
+    # Normalize 'Watermain Install Date' directly to prevent mixed-type pyarrow failures on both original and renamed columns
+    if 'Watermain Install Date' in gdf.columns:
+        gdf['Watermain Install Date'] = pd.to_datetime(gdf['Watermain Install Date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+
     for src, dst in prop_map.items():
         if src in gdf.columns:
             gdf[dst] = gdf[src]
@@ -83,6 +87,12 @@ def read_watermains():
     gdf['diameter_mm'] = pd.to_numeric(gdf.get('diameter_mm'), errors='coerce')
     gdf['construction_year'] = pd.to_numeric(gdf.get('construction_year'), errors='coerce').astype('Int64')
     gdf['measured_length_m'] = pd.to_numeric(gdf.get('measured_length_m'), errors='coerce')
+
+    # normalize install_date to string to prevent mixed-type pyarrow failures
+    if 'install_date' in gdf.columns:
+        gdf['install_date'] = pd.to_datetime(gdf['install_date'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+    else:
+        gdf['install_date'] = ''
 
     # compute length in meters using projected CRS if missing or for normalization
     gdf_proj = gdf.to_crs(epsg=3857)
