@@ -12,6 +12,7 @@ import os
 import numpy as np
 import pandas as pd
 import streamlit as st
+from datetime import datetime
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -115,7 +116,7 @@ def _get_synthetic_pipes() -> pd.DataFrame:
             })
 
     df = pd.DataFrame(rows)
-    df["age"] = (2026 - df["install_year"]).abs()
+    df["age"] = (datetime.now().year - df["install_year"]).abs()
 
     # Demo-only risk score (synthetic mode — not used when use_real=True)
     age_n   = df["age"] / 104

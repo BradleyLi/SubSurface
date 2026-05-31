@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import urllib.request
 from typing import Optional
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -227,7 +228,7 @@ def _parse_features(features: list[dict], pipe_type: str) -> list[dict]:
 def _add_supplemental_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add canonical columns for join/UI; do not compute heuristic risk scores."""
     df = df.copy()
-    df["age"] = (2026 - df["install_year"]).abs()
+    df["age"] = (datetime.now().year - df["install_year"]).abs()
     df["tree_count_5m"] = 0
     df["complaints_12mo"] = 0
     df["utility_cuts_18mo"] = 0
