@@ -185,6 +185,30 @@ for c in cat_cols:
     # cuDF codes: -1 for nulls
     df[c] = df[c].cat.codes.astype('int32')
 
+# Convert datetime-like columns to integer epoch (ms) because xgboost DMatrix from pandas
+# rejects datetime64 dtypes unless enable_categorical is set. Handle in-place to avoid pandas fallback.
+datetime_cols = [c for c in FEATURES if 'datetime' in str(df[c].dtype) or 'timestamp' in str(df[c].dtype)]
+if datetime_cols:
+    logger.info('Converting datetime columns to int64 epoch ms: %s', datetime_cols)
+for c in datetime_cols:
+    # add missing indicator
+    miss = f'{c}__isnan'
+    if df[c].isnull().any():
+        df[miss] = df[c].isnull().astype('int8')
+        FEATURES.append(miss)
+    try:
+        # cuDF supports astype('int64') for datetime to epoch
+        df[c] = df[c].astype('int64')
+    except Exception:
+        # fallback: convert to pandas then to int64
+        logger.info('Fallback converting datetime col %s via pandas', c)
+        df[c] = df[c].to_pandas().astype('int64')
+    # fill NaN (which become large negative if using pandas conversion). Replace NaN with 0
+    try:
+        df[c] = df[c].fillna(0)
+    except Exception:
+        pass
+
 # Missing indicators and numeric fill
 numeric_cols = [c for c in FEATURES if c not in cat_cols]
 # add missing indicators for numeric columns
@@ -223,47 +247,52 @@ scale_pos_weight = (neg / pos) if pos > 0 else 1.0
 logger.info('scale_pos_weight = %s', scale_pos_weight)
 
 # Convert to host pandas only if xgboost cannot accept cuDF directly
-# XGBClassifier with GPU should accept cuDF
-print('Constructing XGBClassifier (GPU)')
-model = XGBClassifier(
-    objective='binary:logistic',
-    tree_method='gpu_hist',
-    predictor='gpu_predictor',
-    gpu_id=args.gpu_id,
-    n_estimators=args.n_estimators,
-    max_depth=args.max_depth,
-    learning_rate=args.learning_rate,
-    subsample=args.subsample,
-    colsample_bytree=args.colsample,
-    min_child_weight=args.min_child_weight,
-    gamma=args.gamma,
-    reg_alpha=args.reg_alpha,
-    reg_lambda=args.reg_lambda,
-    scale_pos_weight=scale_pos_weight,
-    use_label_encoder=False,
-    eval_metric=['auc','aucpr','logloss'],
-    random_state=42
-)
-
-# Fit with early stopping
-print('Starting training with early stopping...')
-model.fit(
-    X_train, y_train,
-    eval_set=[(X_train, y_train), (X_val, y_val)],
-    early_stopping_rounds=50,
-    verbose=100
-)
-
-# Predict on test
-print('Predicting on test set...')
-probs = model.predict_proba(X_test)[:, 1]
-
-# convert to numpy for metrics
+# Use xgboost.train (Booster) with DMatrix for compatibility and explicit GPU usage
+logger.info('Converting datasets to DMatrix for xgboost.train')
 try:
-    probs_cpu = cp.asnumpy(probs) if hasattr(probs, '__cuda_array_interface__') or hasattr(probs, 'to_arrow') else probs.to_numpy()
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dval = xgb.DMatrix(X_val, label=y_val)
+    dtest = xgb.DMatrix(X_test, label=y_test)
 except Exception:
-    probs_cpu = probs.get() if hasattr(probs, 'get') else np.array(probs)
+    logger.info('DMatrix from cuDF failed; converting to pandas')
+    dtrain = xgb.DMatrix(X_train.to_pandas(), label=y_train.to_pandas())
+    dval = xgb.DMatrix(X_val.to_pandas(), label=y_val.to_pandas())
+    dtest = xgb.DMatrix(X_test.to_pandas(), label=y_test.to_pandas())
 
+params = {
+    'tree_method': 'gpu_hist',
+    'predictor': 'gpu_predictor',
+    'gpu_id': args.gpu_id,
+    'objective': 'binary:logistic',
+    'eval_metric': ['auc', 'aucpr', 'logloss'],
+    'eta': args.learning_rate,
+    'max_depth': args.max_depth,
+    'subsample': args.subsample,
+    'colsample_bytree': args.colsample,
+    'min_child_weight': args.min_child_weight,
+    'gamma': args.gamma,
+    'reg_alpha': args.reg_alpha,
+    'reg_lambda': args.reg_lambda,
+    'scale_pos_weight': scale_pos_weight,
+    'verbosity': 1
+}
+
+logger.info('Starting xgboost.train on GPU')
+bst = xgb.train(
+    params,
+    dtrain,
+    num_boost_round=args.n_estimators,
+    evals=[(dtrain, 'train'), (dval, 'val')],
+    early_stopping_rounds=50,
+    verbose_eval=100
+)
+
+logger.info('Best iteration: %s', getattr(bst, 'best_iteration', None))
+
+# Predict on test DMatrix
+logger.info('Predicting on test set using Booster')
+probs = bst.predict(dtest)
+probs_cpu = probs if isinstance(probs, np.ndarray) else np.array(probs)
 try:
     y_test_cpu = y_test.to_pandas()
 except Exception:
