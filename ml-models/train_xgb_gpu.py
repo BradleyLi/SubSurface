@@ -162,6 +162,10 @@ logger.info('Rows train/val/test: %d / %d / %d', len(train_df), len(val_df), len
 
 # FEATURES: drop id and target
 DROP_COLS = [ID_COL, TARGET, YEAR_COL]
+if TARGET == 'breaks_count_next_year':
+    DROP_COLS.append('break_next_year')
+if TARGET == 'break_next_year':
+    DROP_COLS.append('breaks_count_next_year')
 FEATURES = [c for c in df.columns if c not in DROP_COLS]
 logger.info('Initial feature count: %d', len(FEATURES))
 
