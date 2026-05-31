@@ -157,6 +157,8 @@ if has_layers and type_filter:
     mask = mask & df["pipe_type"].isin(type_filter)
 fdf = df[mask]
 
+_voice_payload, _app_voice_match = find_pipe_for_latest_transcript(df)
+
 # ── Map ────────────────────────────────────────────────────────────────────
 with map_col:
     section_title(
@@ -257,6 +259,24 @@ with map_col:
             line=dict(width=4.6, color="#ff4fd8"),
             name=f"Checked Pipes ({len(selected_on_map)})",
             hoverinfo="none",
+            showlegend=True,
+        ))
+
+    if _app_voice_match is not None and _app_voice_match.lat is not None:
+        fig.add_trace(go.Scattermap(
+            lat=[_app_voice_match.lat], lon=[_app_voice_match.lon], mode="markers",
+            marker=dict(size=32, color="#f97316", opacity=0.20),
+            hoverinfo="none", showlegend=False,
+        ))
+        fig.add_trace(go.Scattermap(
+            lat=[_app_voice_match.lat], lon=[_app_voice_match.lon], mode="markers",
+            marker=dict(size=14, color="#f97316", opacity=0.95, symbol="circle"),
+            name="Active Caller Report",
+            hovertemplate=(
+                f"<b>Active Caller Report</b><br>"
+                f"Matched pipe: {_app_voice_match.pipe_id}<br>"
+                f"Confidence: {_app_voice_match.confidence:.0%}<extra></extra>"
+            ),
             showlegend=True,
         ))
 
@@ -426,6 +446,52 @@ with tab1:
         "Savings $":    queue_df["expected_savings"].values,
         "In Budget":    queue_df["in_budget"].values,
     })
+
+    if _app_voice_match is not None:
+        st.markdown(
+            """
+<style>
+@keyframes voice-pulse {
+  0%,100% { opacity: 1; border-left-color: #f97316; box-shadow: 0 0 6px rgba(249,115,22,.6); }
+  50%      { opacity: .6; border-left-color: #fbbf24; box-shadow: 0 0 14px rgba(251,191,36,.4); }
+}
+.voice-alert {
+  animation: voice-pulse 1.4s ease-in-out infinite;
+  border-left: 3px solid #f97316;
+  background: rgba(249,115,22,.08);
+  border-radius: 6px;
+  padding: .6rem .85rem;
+  font-size: .82rem;
+  color: #e8d5b0;
+  margin-bottom: .6rem;
+}
+.voice-dot {
+  display: inline-block; width: 9px; height: 9px;
+  border-radius: 50%; background: #f97316;
+  animation: voice-pulse 1.4s ease-in-out infinite;
+  margin-right: 6px; vertical-align: middle;
+}
+</style>
+""",
+            unsafe_allow_html=True,
+        )
+        incident = (_voice_payload or {}).get("incident") or {}
+        loc = incident.get("location") if isinstance(incident, dict) else None
+        addr = (
+            loc.get("address", "reported location")
+            if isinstance(loc, dict)
+            else "reported location"
+        )
+        st.markdown(
+            f'<div class="voice-alert" style="margin-bottom:1rem">'
+            f'<span class="voice-dot"></span>'
+            f'<strong>Active Caller Report</strong> — {addr}<br>'
+            f'<span style="color:#9ba8b5;font-size:.76rem">'
+            f'Matched to <strong>{_app_voice_match.pipe_id}</strong> · '
+            f'{_app_voice_match.confidence:.0%} · {_app_voice_match.method}'
+            f'</span></div>',
+            unsafe_allow_html=True,
+        )
 
     queue_col, agent_col = st.columns([2.3, 1.3], gap="medium")
 

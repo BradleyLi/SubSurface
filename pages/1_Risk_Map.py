@@ -63,6 +63,34 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+<style>
+@keyframes voice-pulse {
+  0%,100% { opacity: 1; border-left-color: #f97316; box-shadow: 0 0 6px rgba(249,115,22,.6); }
+  50%      { opacity: .6; border-left-color: #fbbf24; box-shadow: 0 0 14px rgba(251,191,36,.4); }
+}
+.voice-alert {
+  animation: voice-pulse 1.4s ease-in-out infinite;
+  border-left: 3px solid #f97316;
+  background: rgba(249,115,22,.08);
+  border-radius: 6px;
+  padding: .6rem .85rem;
+  font-size: .82rem;
+  color: #e8d5b0;
+  margin-bottom: .6rem;
+}
+.voice-dot {
+  display: inline-block; width: 9px; height: 9px;
+  border-radius: 50%; background: #f97316;
+  animation: voice-pulse 1.4s ease-in-out infinite;
+  margin-right: 6px; vertical-align: middle;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 # ── Map + inline filter panel + detail ────────────────────────────────────────
 map_col, filter_col, detail_col = st.columns([3, 1, 1], gap="medium")
 
@@ -111,6 +139,8 @@ mask = (
 if has_layers and type_filter:
     mask = mask & df["pipe_type"].isin(type_filter)
 fdf = df[mask]
+
+_voice_payload, voice_match = find_pipe_for_latest_transcript(df)
 
 # Stats strip
 s1, s2, s3, s4 = st.columns(4)
@@ -223,6 +253,24 @@ with map_col:
             ),
             name="hover",
             showlegend=False,
+        ))
+
+    if voice_match is not None and voice_match.lat is not None:
+        fig.add_trace(go.Scattermap(
+            lat=[voice_match.lat], lon=[voice_match.lon], mode="markers",
+            marker=dict(size=32, color="#f97316", opacity=0.20),
+            hoverinfo="none", showlegend=False,
+        ))
+        fig.add_trace(go.Scattermap(
+            lat=[voice_match.lat], lon=[voice_match.lon], mode="markers",
+            marker=dict(size=14, color="#f97316", opacity=0.95, symbol="circle"),
+            name="Active Caller Report",
+            hovertemplate=(
+                f"<b>Active Caller Report</b><br>"
+                f"Matched pipe: {voice_match.pipe_id}<br>"
+                f"Confidence: {voice_match.confidence:.0%}<extra></extra>"
+            ),
+            showlegend=True,
         ))
 
     fig.update_layout(
@@ -424,7 +472,6 @@ with detail_col:
                 f"Workflow 2 unavailable: {w2_health.get('detail', 'check Ollama :11434')}"
             )
 
-        _voice_payload, voice_match = find_pipe_for_latest_transcript(df)
         w2_pipe_id = selected_id
         if voice_match is not None:
             incident = (_voice_payload or {}).get("incident") or {}
@@ -445,11 +492,19 @@ with detail_col:
             }
             where = addr
             if voice_match.matched_neighbourhood:
-                where = f"{addr} · neighbourhood **{voice_match.matched_neighbourhood}**"
-            st.info(
-                f"Caller report at {where} matched to **{voice_match.pipe_id}** "
-                f"(confidence {voice_match.confidence:.0%}, {voice_match.method}). "
-                "A voice transcript orchestrator will triage caller details into each W2 role."
+                where = (
+                    f"{addr} · neighbourhood "
+                    f"<strong>{voice_match.matched_neighbourhood}</strong>"
+                )
+            st.markdown(
+                f'<div class="voice-alert">'
+                f'<span class="voice-dot"></span>'
+                f'<strong>Active Caller Report</strong> — {where}<br>'
+                f'<span style="color:#9ba8b5;font-size:.76rem">'
+                f'Matched to <strong>{voice_match.pipe_id}</strong> · '
+                f'{voice_match.confidence:.0%} confidence · {voice_match.method}'
+                f'</span></div>',
+                unsafe_allow_html=True,
             )
             if voice_match.pipe_id != selected_id:
                 use_matched = st.checkbox(
