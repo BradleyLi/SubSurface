@@ -1,0 +1,12 @@
+ 30-05-2026 21:15:01:28 [pid=900060 tid=900060] NOTICE  cufio-drv:1063 running in compatible mode
+ 30-05-2026 21:15:01:628 [pid=900060 tid=900060] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2
+ 30-05-2026 21:15:01:628 [pid=900060 tid=900060] NOTICE  cufio:289 cuFileHandleRegister GDS not supported or disabled by config, using cuFile posix read/write with compat mode enabled
+ 30-05-2026 21:15:31:358 [pid=900742 tid=900742] NOTICE  cufio-drv:1063 running in compatible mode
+ 30-05-2026 21:15:31:960 [pid=900742 tid=900742] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2
+ 30-05-2026 21:15:31:960 [pid=900742 tid=900742] NOTICE  cufio:289 cuFileHandleRegister GDS not supported or disabled by config, using cuFile posix read/write with compat mode enabled
+ 30-05-2026 21:15:53:413 [pid=901319 tid=901319] NOTICE  cufio-drv:1063 running in compatible mode
+ 30-05-2026 21:15:54:424 [pid=901319 tid=901319] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2
+ 30-05-2026 21:15:54:424 [pid=901319 tid=901319] NOTICE  cufio:289 cuFileHandleRegister GDS not supported or disabled by config, using cuFile posix read/write with compat mode enabled
+ 30-05-2026 21:16:50:644 [pid=910715 tid=910715] NOTICE  cufio-drv:1063 running in compatible mode
+ 30-05-2026 21:16:51:381 [pid=910715 tid=910715] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2
+ 30-05-2026 21:16:51:381 [pid=910715 tid=910715] NOTICE  cufio:289 cuFileHandleRegister GDS not supported or disabled by config, using cuFile posix read/write with compat mode enabled

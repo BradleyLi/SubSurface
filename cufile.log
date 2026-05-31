@@ -1,0 +1,6 @@
+ 30-05-2026 18:45:15:617 [pid=419191 tid=419191] NOTICE  cufio-drv:1160 running in compatible mode
+ 30-05-2026 18:45:16:21 [pid=419191 tid=419191] NOTICE  cufio-drv:938 GPU deviceid: 0 ( NVIDIA GB10 ) no native GDS - compat mode only
+ 30-05-2026 18:45:16:226 [pid=419191 tid=419191] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2
+ 30-05-2026 18:46:28:65 [pid=421474 tid=421474] NOTICE  cufio-drv:1160 running in compatible mode
+ 30-05-2026 18:46:28:490 [pid=421474 tid=421474] NOTICE  cufio-drv:938 GPU deviceid: 0 ( NVIDIA GB10 ) no native GDS - compat mode only
+ 30-05-2026 18:46:28:716 [pid=421474 tid=421474] ERROR  cufio-fs:79 mount option not found in mount table data device: /dev/nvme0n1p2

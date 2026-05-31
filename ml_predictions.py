@@ -152,7 +152,7 @@ def enrich_real_pipes_with_predictions(
 
     if "ml_age_years" in merged.columns:
         ml_age = pd.to_numeric(merged["ml_age_years"], errors="coerce").round()
-        merged["age"] = ml_age.fillna(merged["age"]).astype(int)
+        merged["age"] = ml_age.fillna(merged["age"]).abs().astype(int)
 
     merged["risk_score"] = (merged["predicted_break_probability"] * 100.0).round(1)
     merged["risk_level"] = pd.cut(

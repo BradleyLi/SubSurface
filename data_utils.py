@@ -115,7 +115,7 @@ def _get_synthetic_pipes() -> pd.DataFrame:
             })
 
     df = pd.DataFrame(rows)
-    df["age"] = 2024 - df["install_year"]
+    df["age"] = (2026 - df["install_year"]).abs()
 
     # Demo-only risk score (synthetic mode — not used when use_real=True)
     age_n   = df["age"] / 104

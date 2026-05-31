@@ -1,0 +1,78 @@
+{
+  "panel": "/home/asus/Documents/will/SubSurface/ml-models/.structured-data/panel.parquet",
+  "model": "/home/asus/Documents/will/SubSurface/ml-models/.structured-data/models/xgb_model.json",
+  "start_year": 2015,
+  "end_year": 2016,
+  "n_rows": 98434,
+  "n_features": 32,
+  "feature_names": [
+    "diameter_mm",
+    "material",
+    "construction_year",
+    "length_m",
+    "centroid_lon",
+    "centroid_lat",
+    "source_layer",
+    "trees_count",
+    "trees_with_dbh_count",
+    "avg_dbh_cm",
+    "median_dbh_cm",
+    "max_dbh_cm",
+    "sum_dbh_cm",
+    "trees_small_count",
+    "trees_medium_count",
+    "trees_large_count",
+    "trees_count_per_100m",
+    "break_count",
+    "breaks_past_1yr",
+    "breaks_past_3yr",
+    "breaks_past_5yr",
+    "years_since_last_break",
+    "age_years",
+    "log_length",
+    "age_x_diameter",
+    "diameter_mm__isnan",
+    "construction_year__isnan",
+    "avg_dbh_cm__isnan",
+    "median_dbh_cm__isnan",
+    "max_dbh_cm__isnan",
+    "years_since_last_break__isnan",
+    "age_years__isnan"
+  ],
+  "predictions_file": "/home/asus/Documents/will/SubSurface/ml-models/.structured-data/predictions/pipe_predictions_2015_2016.jsonl",
+  "shap_base_value": 0.16709619760513306,
+  "best_iteration": 1999,
+  "record_schema": {
+    "pipe_id": "WM_{asset_id}",
+    "prediction_date": "YYYY-01-01 snapshot date",
+    "predicted_break_probability": "model score",
+    "risk_percentile": "percentile rank vs all pipes in the same year (0-100)",
+    "pipe_attributes": [
+      "material",
+      "diameter_mm",
+      "installation_year",
+      "age_years",
+      "length_m"
+    ],
+    "break_history": [
+      "total_breaks",
+      "breaks_last_5_years",
+      "years_since_last_break"
+    ],
+    "location": [
+      "latitude",
+      "longitude",
+      "ward"
+    ],
+    "model_output": [
+      "base_probability",
+      "final_probability"
+    ],
+    "top_shap_contributors": [
+      "feature",
+      "feature_value",
+      "shap_contribution",
+      "impact"
+    ]
+  }
+}
