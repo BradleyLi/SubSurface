@@ -31,6 +31,24 @@ DEFAULT_ENRICHED_PATH = (
     BASE_DIR / "data" / "watermains" / "ml_enriched_pipes.parquet"
 )
 
+# Percentile cutoffs for risk_level (Critical = top bin, lower bound 95).
+RISK_PERCENTILE_BINS = [0, 50, 80, 95, 100]
+RISK_LEVEL_LABELS = ["Low", "Medium", "High", "Critical"]
+
+
+def assign_risk_levels(df: pd.DataFrame) -> pd.DataFrame:
+    """Map risk_percentile to risk_level and risk_color."""
+    if "risk_percentile" not in df.columns:
+        return df
+    out = df.copy()
+    out["risk_level"] = pd.cut(
+        out["risk_percentile"],
+        bins=RISK_PERCENTILE_BINS,
+        labels=RISK_LEVEL_LABELS,
+    )
+    out["risk_color"] = out["risk_level"].map(RISK_COLORS)
+    return out
+
 
 def active_prediction_year() -> int:
     """Snapshot year for ML predictions (override via ML_PREDICTION_YEAR env)."""
@@ -68,6 +86,7 @@ def _enriched_source_paths() -> list[Path]:
         data_dir / DIST_GEOJSON_NAME,
         data_dir / TRANS_GEOJSON_NAME,
         predictions_path(),
+        Path(__file__),
     ]
 
 
@@ -107,7 +126,7 @@ def _restore_enriched_from_parquet(df: pd.DataFrame) -> pd.DataFrame:
             return raw
 
         out["ml_top_shap_contributors"] = out["ml_top_shap_contributors"].map(_parse_shap)
-    return out
+    return assign_risk_levels(out)
 
 
 def load_enriched_pipes_static(path: Path | None = None) -> pd.DataFrame:
@@ -245,12 +264,7 @@ def enrich_real_pipes_with_predictions(
         merged["age"] = ml_age.fillna(merged["age"]).abs().astype(int)
 
     merged["risk_score"] = (merged["predicted_break_probability"] * 100.0).round(1)
-    merged["risk_level"] = pd.cut(
-        merged["risk_percentile"],
-        bins=[0, 25, 50, 75, 100],
-        labels=["Low", "Medium", "High", "Critical"],
-    )
-    merged["risk_color"] = merged["risk_level"].map(RISK_COLORS)
+    merged = assign_risk_levels(merged)
 
     if "ml_break_count_10yr" in merged.columns:
         merged["break_count_10yr"] = (

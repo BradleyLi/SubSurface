@@ -15,7 +15,7 @@ from agent.llm_client import chat_completion_messages
 from agent.schemas import PipeRiskEvidence, RiskSummaryResponse, Workflow1Summary
 from agent.template_summary import template_summary
 from agent.w1_prompts import build_json_repair_messages, build_json_summary_messages
-from data_utils import get_pipes
+from data_utils import get_pipes_uncached
 from ml_predictions import find_pipe_row
 
 PROMPT_VERSION = "workflow1-v1"
@@ -31,7 +31,7 @@ def workflow1_summary(
     Build evidence for pipe_id, call Nemotron, validate JSON, or use template fallback.
     """
     if df is None:
-        df = get_pipes(use_real=use_real)
+        df = get_pipes_uncached(use_real=use_real)
 
     row = find_pipe_row(df, pipe_id)
     if row is None:

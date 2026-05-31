@@ -233,6 +233,12 @@ if [[ "${1:-}" == "--stop" ]]; then
   exit 0
 fi
 
+# Reclaim default ports so React (Vite → :8000) and Streamlit hit this stack, not a stale process.
+echo "==> Ensuring default ports are free (8000, 8501, 8503)…"
+kill_listeners_on_port 8000
+kill_listeners_on_port 8501
+kill_listeners_on_port 8503
+
 if ! command -v "${OLLAMA_BIN}" >/dev/null 2>&1; then
   echo "ERROR: '${OLLAMA_BIN}' not found in PATH." >&2
   echo "Install Ollama (https://ollama.com) or set OLLAMA_BIN to the binary path." >&2

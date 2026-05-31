@@ -18,7 +18,7 @@ from agent.harness.health import check_all, check_profile
 from agent.schemas import AnalysisRunRequest
 from agent.w2_gateway import workflow2_run
 from agent.w2_storage import load_file, load_manifest
-from data_utils import get_ai_response, get_distribution_watermains, get_pipes
+from data_utils import get_ai_response, get_distribution_watermains, get_pipes_uncached
 from real_data import get_real_pipes
 
 
@@ -81,7 +81,7 @@ async def health_workflow2() -> dict:
 @app.get("/api/pipes")
 def api_pipes(use_real: bool = True) -> dict:
     try:
-        df = get_pipes(use_real=use_real)
+        df = get_pipes_uncached(use_real=use_real)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to load pipes: {exc}") from exc
     return {
@@ -99,7 +99,7 @@ def api_watermains_layer(
 ) -> dict:
     try:
         if not use_real or layer_mode == "Synthetic":
-            df = get_pipes(use_real=True)
+            df = get_pipes_uncached(use_real=True)
             df = df[df["pipe_type"] == "Synthetic"].copy()
             source = "synthetic"
         elif layer_mode == "Distribution":
@@ -204,14 +204,14 @@ def api_get_analysis_run_file(run_id: str, filename: str) -> dict:
 @app.post("/api/ai-response")
 def api_ai_response(body: AIRequest) -> dict:
     try:
-        df = get_pipes(use_real=body.use_real)
+        df = get_pipes_uncached(use_real=body.use_real)
 
         if body.focus_ward and body.focus_ward != "All Wards":
             df = df[df["ward"] == body.focus_ward]
         if body.focus_material and body.focus_material != "All Materials":
             df = df[df["material"] == body.focus_material]
         if df.empty:
-            df = get_pipes(use_real=body.use_real)
+            df = get_pipes_uncached(use_real=body.use_real)
 
         reply = get_ai_response(body.query, df)
     except Exception as exc:

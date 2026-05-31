@@ -58,26 +58,25 @@ def get_pipes(use_real: bool = True) -> pd.DataFrame:
     Pass use_real=True for Toronto Open Data enriched with ML predictions (default).
     Pass use_real=False for synthetic demo data.
     """
+    return get_pipes_uncached(use_real=use_real)
+
+
+def get_pipes_uncached(use_real: bool = True) -> pd.DataFrame:
+    """Load pipes without Streamlit cache — used by FastAPI so risk thresholds stay current."""
     if use_real:
-        from ml_predictions import active_prediction_year
+        from ml_predictions import active_prediction_year, get_ml_enriched_pipes
 
-        return _get_ml_enriched_pipes_cached(active_prediction_year())
+        return get_ml_enriched_pipes(max_dist=None, prediction_year=active_prediction_year())
 
-    return _get_synthetic_pipes()
-
-
-@st.cache_data(
-    show_spinner="📡 Loading Toronto watermains with ML break-risk predictions…",
-    ttl=3600,
-)
-def _get_ml_enriched_pipes_cached(prediction_year: int) -> pd.DataFrame:
-    from ml_predictions import get_ml_enriched_pipes
-
-    return get_ml_enriched_pipes(max_dist=None, prediction_year=prediction_year)
+    return _get_synthetic_pipes_uncached()
 
 
 @st.cache_data(show_spinner=False)
 def _get_synthetic_pipes() -> pd.DataFrame:
+    return _get_synthetic_pipes_uncached()
+
+
+def _get_synthetic_pipes_uncached() -> pd.DataFrame:
     rng = np.random.default_rng(42)
     rows: list[dict] = []
 
@@ -142,7 +141,7 @@ def _get_synthetic_pipes() -> pd.DataFrame:
     df["risk_score"] = (raw * 100).round(1)
     df["risk_level"] = pd.cut(
         df["risk_score"],
-        bins=[0, 25, 50, 75, 100],
+        bins=[0, 25, 50, 95, 100],
         labels=["Low", "Medium", "High", "Critical"],
     )
     df["risk_color"] = df["risk_level"].map(RISK_COLORS)

@@ -123,6 +123,14 @@ body,
   text-transform: uppercase;
 }
 
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
 .status-banner {
   margin: 0.75rem 1.25rem;
   padding: 0.75rem 0.9rem;
@@ -405,12 +413,182 @@ body,
   color: #4a6278;
 }
 
+/* ── Summary Agent (Workflow 1) ── */
+.summary-agent {
+  margin: 0.65rem 1.25rem 0;
+  padding: 0.75rem 0.9rem;
+  background: #f8f9fc;
+  border: 1px solid #d8e0ea;
+  border-left: 3px solid #6366f1;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.summary-agent-empty {
+  border-left-color: #c8d4e0;
+}
+
+.summary-agent-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.summary-agent-label {
+  display: block;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6366f1;
+}
+
+.summary-agent-header h3 {
+  margin: 0.15rem 0 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0d1b2a;
+}
+
+.summary-agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.summary-agent-status.idle {
+  color: #8fa4b8;
+}
+
+.summary-agent-status.loading {
+  color: #2563eb;
+}
+
+.summary-agent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563eb;
+  animation: summary-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes summary-agent-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.summary-agent-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.summary-agent-badge.nemotron {
+  color: #007a6e;
+}
+
+.summary-agent-badge.template {
+  color: #ea580c;
+}
+
+.summary-agent-placeholder {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #6b8299;
+}
+
+.summary-agent-loading {
+  margin-top: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 8px;
+}
+
+.summary-agent-loading p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #334155;
+}
+
+.summary-agent-loading small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  color: #8fa4b8;
+}
+
+.summary-agent-error {
+  margin-top: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  color: #991b1b;
+}
+
+.summary-agent-body {
+  margin-top: 0.55rem;
+}
+
+.summary-agent-headline {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0d1b2a;
+}
+
+.summary-agent-risk {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.summary-agent-reasons {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #4a6278;
+}
+
+.summary-agent-next {
+  margin: 0.5rem 0 0;
+  font-size: 0.74rem;
+  color: #0d1b2a;
+}
+
+.summary-agent-next strong {
+  color: #ea580c;
+}
+
+.summary-agent-caveats {
+  margin: 0.45rem 0 0;
+  font-size: 0.65rem;
+  font-style: italic;
+  color: #8fa4b8;
+}
+
+.summary-agent-model {
+  margin: 0.35rem 0 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  color: #8fa4b8;
+}
+
 /* ── Critical table ── */
 .critical-table-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   padding: 0.65rem 1.25rem 1rem;
 }
 
@@ -438,8 +616,6 @@ body,
 }
 
 .table-scroll {
-  flex: 1;
-  overflow: auto;
   border: 1px solid #e2e9f0;
   border-radius: 8px;
 }

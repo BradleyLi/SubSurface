@@ -5,6 +5,7 @@ import Map3D from "./components/Map3D";
 import FilterPanel from "./components/FilterPanel";
 import CriticalTable from "./components/CriticalTable";
 import PipeDetail from "./components/PipeDetail";
+import SummaryAgent from "./components/SummaryAgent";
 import KpiBar from "./components/KpiBar";
 
 export default function App() {
@@ -50,58 +51,62 @@ export default function App() {
           </div>
         </header>
 
-        {loading && (
-          <div className="status-banner loading">
-            Loading pipe network from CityNerve API…
-          </div>
-        )}
+        <div className="sidebar-scroll">
+          {loading && (
+            <div className="status-banner loading">
+              Loading pipe network from CityNerve API…
+            </div>
+          )}
 
-        {error && (
-          <div className="status-banner error">
-            <strong>API unavailable.</strong> Start the SubSurface backend:{" "}
-            <code>./scripts/run_citynerve.sh</code> or{" "}
-            <code>uvicorn backend.main:app --port 8000</code>
-            <br />
-            <small>{error}</small>
-          </div>
-        )}
+          {error && (
+            <div className="status-banner error">
+              <strong>API unavailable.</strong> Start the SubSurface backend:{" "}
+              <code>./scripts/run_citynerve.sh</code> or{" "}
+              <code>uvicorn backend.main:app --port 8000</code>
+              <br />
+              <small>{error}</small>
+            </div>
+          )}
 
-        {!loading && !error && (
-          <>
-            <KpiBar
-              segmentsShown={stats.total}
-              critical={stats.critical}
-              high={stats.high}
-              avgRisk={stats.avgRisk}
-              networkTotal={stats.networkTotal}
-              networkCritical={stats.networkCritical}
-              source={source}
-            />
+          {!loading && !error && (
+            <>
+              <KpiBar
+                segmentsShown={stats.total}
+                critical={stats.critical}
+                high={stats.high}
+                avgRisk={stats.avgRisk}
+                networkTotal={stats.networkTotal}
+                networkCritical={stats.networkCritical}
+                source={source}
+              />
 
-            <FilterPanel
-              filters={filters}
-              materials={materials}
-              wards={wards}
-              pipeTypes={pipeTypes}
-              riskLevels={riskLevels}
-              onChange={updateFilters}
-              onReset={resetFilters}
-              onCriticalOnly={showCriticalOnly}
-            />
+              <FilterPanel
+                filters={filters}
+                materials={materials}
+                wards={wards}
+                pipeTypes={pipeTypes}
+                riskLevels={riskLevels}
+                onChange={updateFilters}
+                onReset={resetFilters}
+                onCriticalOnly={showCriticalOnly}
+              />
 
-            <PipeDetail
-              pipe={selectedPipe}
-              onClose={() => setSelectedPipe(null)}
-            />
+              <PipeDetail
+                pipe={selectedPipe}
+                onClose={() => setSelectedPipe(null)}
+              />
 
-            <CriticalTable
-              rows={criticalTableRows}
-              selectedPipeId={selectedPipe?.pipe_id ?? null}
-              onSelect={handleSelectPipe}
-              totalCritical={stats.critical}
-            />
-          </>
-        )}
+              <SummaryAgent pipe={selectedPipe} useReal />
+
+              <CriticalTable
+                rows={criticalTableRows}
+                selectedPipeId={selectedPipe?.pipe_id ?? null}
+                onSelect={handleSelectPipe}
+                totalCritical={stats.critical}
+              />
+            </>
+          )}
+        </div>
       </aside>
     </div>
   );
