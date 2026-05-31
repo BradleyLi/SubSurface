@@ -14,13 +14,16 @@ import {
   pipesToGeoJSON,
   riskColorExpression,
   selectedPipeGeoJSON,
+  voiceMarkerGeoJSON,
 } from "../utils/geojson";
+import type { VoicePipeMatch } from "../types/voice";
 
 interface Map3DProps {
   pipes: Pipe[];
   colorMode: "risk" | "type";
   selectedPipe: Pipe | null;
   onSelectPipe: (pipe: Pipe | null) => void;
+  voiceMatch?: VoicePipeMatch | null;
 }
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
@@ -30,6 +33,7 @@ export default function Map3D({
   colorMode,
   selectedPipe,
   onSelectPipe,
+  voiceMatch,
 }: Map3DProps) {
   const mapRef = useRef<MapRef>(null);
   const geojson = useMemo(
@@ -39,6 +43,10 @@ export default function Map3D({
   const selectionGeojson = useMemo(
     () => selectedPipeGeoJSON(selectedPipe),
     [selectedPipe],
+  );
+  const voiceGeojson = useMemo(
+    () => voiceMarkerGeoJSON(voiceMatch?.lat, voiceMatch?.lon),
+    [voiceMatch?.lat, voiceMatch?.lon],
   );
 
   const flyToPipe = useCallback((pipe: Pipe) => {
@@ -169,6 +177,28 @@ export default function Map3D({
             paint={{
               "circle-radius": 8,
               "circle-color": "#ff4fd8",
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#ffffff",
+            }}
+          />
+        </Source>
+
+        <Source id="voice-marker" type="geojson" data={voiceGeojson}>
+          <Layer
+            id="voice-marker-glow"
+            type="circle"
+            paint={{
+              "circle-radius": 16,
+              "circle-color": "#f97316",
+              "circle-opacity": 0.25,
+            }}
+          />
+          <Layer
+            id="voice-marker-point"
+            type="circle"
+            paint={{
+              "circle-radius": 8,
+              "circle-color": "#f97316",
               "circle-stroke-width": 2,
               "circle-stroke-color": "#ffffff",
             }}

@@ -6,7 +6,7 @@ Built for the NVIDIA Spark Hackathon — Toronto.
 
 ## Quick start (one command)
 
-After setup, start the full stack (dual Ollama, FastAPI, Streamlit UI, Voice Reporting Line):
+After setup, start the full stack (dual Ollama, FastAPI, React UI, Voice Reporting Line):
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -14,6 +14,7 @@ pip install -r requirements.txt
 
 # Nemotron W1/W2 — root .env.example (WORKFLOW1/2); agent/.env.example adds NemoClaw ports
 cp .env.example .env
+cp SubSurface-UI/.env.example SubSurface-UI/.env   # set VITE_MAPBOX_TOKEN
 
 ./scripts/run_citynerve.sh
 ```
@@ -29,13 +30,13 @@ port. Open the `Voice Reporting` URL printed in the startup banner, for example
 `http://localhost:8504/client/`.
 
 The Voice Reporting Line always uses Workflow 1. Workflow 2 is reserved for
-summary/report workflows.
+multi-role analysis in the React UI.
 
 | Service | URL | Notes |
 |---------|-----|--------|
-| Streamlit UI | http://127.0.0.1:8501 | `app.py` + `pages/` — map, simulator, assistant |
+| React UI (Vite) | http://127.0.0.1:5173 | `SubSurface-UI/` — 3D map, W1/W2 agents, voice alerts |
 | FastAPI | http://127.0.0.1:8000 | API docs at `/docs` |
-| Voice Reporting Line | http://127.0.0.1:8503/client/ | Hold-to-talk mic; transcript on **End call** → `voice_sessions/` |
+| Voice Reporting Line | http://127.0.0.1:8504/client/ | Hold-to-talk mic; transcript on **End call** → `voice_sessions/` |
 | Ollama W2 | http://127.0.0.1:11434 | `nemotron-3-super:latest` |
 | Ollama W1 | http://127.0.0.1:11436 | `nemotron-nano:12b-v2` |
 
@@ -51,7 +52,7 @@ Health check (after startup): `./agent/scripts/check_endpoints.sh`
 1. Dual Ollama — W2 `:11434`, W1 `:11436` ([cheatsheet](GX10-Nemotron-Ollama-Cheatsheet.md)) — `./agent/scripts/ollama-dual-serve.example.sh`
 2. NemoClaw sandboxes `hackathon-w1` + `nemotron-3-super` ([agent/nemoclaw/README.md](agent/nemoclaw/README.md))
 3. FastAPI backend
-4. Streamlit UI (calls FastAPI only, not Ollama)
+4. React UI (`SubSurface-UI/`) — calls FastAPI only, not Ollama
 5. Voice Reporting Line (optional) — `./scripts/run_voice_chat.sh`
 
 ```bash
@@ -62,18 +63,16 @@ uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 In a second terminal:
 
 ```bash
-# Optional if you run API elsewhere:
-# export CITYNERVE_API_URL="http://127.0.0.1:8000"
-streamlit run app.py --server.port 8501
+cd SubSurface-UI && npm install && npm run dev
 ```
 
-Voice only (separate from Streamlit/FastAPI):
+Voice only (separate from React/FastAPI):
 
 ```bash
 ./scripts/run_voice_chat.sh
 ```
 
-Open **http://127.0.0.1:8503/client/** locally, or **http://<server-ip>:8503/client/** from another machine — allow the browser microphone, **hold** the mic button to speak, **release** to send (local Whisper STT). Click **End call** to write the transcript JSON under `voice_sessions/` (nothing is saved before end call). Streamlit pages subscribe to transcript events on the same hostname that served the frontend, port `8503`, unless `VOICE_TRANSCRIPT_EVENTS_URL` is set.
+Open **http://127.0.0.1:8504/client/** locally, or **http://<server-ip>:8504/client/** from another machine — allow the browser microphone, **hold** the mic button to speak, **release** to send (local Whisper STT). Click **End call** to write the transcript JSON under `voice_sessions/` (nothing is saved before end call). The React UI listens for transcript events and refreshes the caller-report alert via `/api/voice/match/latest`.
 
 Verify Ollama: `./agent/scripts/check_endpoints.sh`
 
@@ -81,12 +80,12 @@ Verify Ollama: `./agent/scripts/check_endpoints.sh`
 
 ### Voice call session (optional)
 
-Standalone **CityNerve Reporting Line** — simulates a live watermain-break call. Included in `./scripts/run_citynerve.sh` on port **8503**, or run alone via `./scripts/run_voice_chat.sh`.
+Standalone **CityNerve Reporting Line** — simulates a live watermain-break call. Included in `./scripts/run_citynerve.sh` on port **8504**, or run alone via `./scripts/run_voice_chat.sh`.
 
 **Prerequisites**
 
 - Python venv with `pip install -r requirements.txt`
-- Ollama Workflow 1 running on `:11436`; Workflow 2 is reserved for summary/report workflows
+- Ollama Workflow 1 running on `:11436`; Workflow 2 is reserved for multi-role analysis
 - Firefox or another browser with microphone access
 
 GX10/GB10 note: if voice transcription fails with
@@ -109,17 +108,17 @@ Full env reference and troubleshooting: [agent/README.md](agent/README.md#voice-
 
 ## Agent + app stack
 
-There is no separate npm/React frontend. **UI** = Streamlit (`app.py`, `pages/`) plus shared Python modules in `frontend/` (imported by pages, not a second web server).
+Primary UI is **SubSurface-UI** (React + Vite + Mapbox GL). The React app calls FastAPI only — never Ollama directly.
 
 | Piece | Role | Port |
 |-------|------|------|
 | **XGBoost / model/** | Deterministic risk scoring | — |
-| **backend/** (FastAPI) | API — train/predict, future W1/W2 LLM routes via `agent.harness` | 8000 |
-| **app.py + pages/** + **frontend/** | Streamlit UI — map, simulator, assistant; HTTP to FastAPI only | 8501 |
+| **backend/** (FastAPI) | API — pipes, W1/W2 LLM routes via `agent.harness` | 8000 |
+| **SubSurface-UI/** | React UI — 3D map, W1 summary, W2 multi-role analysis, voice alerts | 5173 |
 | **Ollama W1** | Fast summaries (`nemotron-nano:12b-v2`) | 11436 |
 | **Ollama W2** | Deep analysis (`nemotron-3-super:latest`) | 11434 |
-| **Voice call** | Push-to-talk reporting line — browser mic, local Whisper STT, Ollama agent (W1 default), transcript JSON on end call | 8503 |
-| **`scripts/run_citynerve.sh`** | One command — starts Ollama (if needed), FastAPI, Streamlit, voice line | — |
+| **Voice call** | Push-to-talk reporting line — browser mic, local Whisper STT, Ollama agent (W1 default), transcript JSON on end call | 8504 |
+| **`scripts/run_citynerve.sh`** | One command — starts Ollama (if needed), FastAPI, React UI, voice line | — |
 | **NemoClaw** | Agent sandboxes for investigation | see [agent/nemoclaw/](agent/nemoclaw/) |
 
 Details: [agent/README.md](agent/README.md) · [GX10-Nemotron-Ollama-Cheatsheet.md](GX10-Nemotron-Ollama-Cheatsheet.md)
@@ -128,30 +127,27 @@ Details: [agent/README.md](agent/README.md) · [GX10-Nemotron-Ollama-Cheatsheet.
 
 ```text
 SubSurface/
-├── frontend/        # shared Python modules for Streamlit pages (not a separate web app)
+├── SubSurface-UI/   # React + Vite front-end (primary UI)
 ├── backend/         # FastAPI service
 ├── model/           # risk/model logic
 ├── agent/           # harness (Ollama client) + narrative helpers
-├── app.py           # Streamlit main page (entrypoint)
-├── pages/           # Streamlit multipage views
 └── scripts/         # run_citynerve.sh (full stack), run_voice_chat.sh (voice only)
 ```
 
 Notes:
-- `app.py` and `pages/` stay at root to preserve Streamlit multipage discovery.
-- `frontend/` holds reusable UI/helpers imported by `pages/`; it is not a standalone server.
 - New model logic lives in `model/risk_profile.py`.
-- New agent narrative logic lives in `agent/why_failing_agent.py`.
+- Agent narrative logic lives in `agent/gateway.py` (W1) and `agent/w2_gateway.py` (W2).
 
-## UI Pages
+## UI Features (SubSurface-UI)
 
-| Page | Description |
+| Feature | Description |
 |---|---|
-| `app.py` | Command Center — KPIs, pipeline status, top critical pipes |
-| `pages/1_Risk_Map.py` | Risk map — SHAP explainability, Workflow 2 multi-role analysis (W1 on Overview queue) |
-| `pages/2_Decision_Engine.py` | Priority queue — ranked replacement list, cost-benefit analysis |
-| `pages/3_Cascade_Simulator.py` | Cascade Failure Simulator — "If pipe X breaks, what goes down?" |
-| `pages/4_AI_Assistant.py` | AI chat interface — NIM/Nemotron natural language Q&A |
+| 3D risk map | Mapbox GL map with risk-colored pipe segments |
+| Filters + KPIs | Risk level, material, ward, pipe type, min risk score |
+| Workflow 1 | Nemotron JSON risk summary on pipe select |
+| Workflow 2 | Multi-role analysis (Engineer, Police, Field, Operations) + synthesis + BoM |
+| Voice integration | Caller report alert, map marker, W2 transcript context |
+| Critical queue | Top 100 critical pipes by network percentile |
 
 ## Tech Stack
 
@@ -160,4 +156,4 @@ Notes:
 - **Graph**: cuGraph — cascade failure propagation through pipe network
 - **Explainability**: cuML SHAP — feature contributions per prediction
 - **Agent**: NIM / Nemotron — natural language work orders and what-if analysis
-- **UI**: Streamlit + Plotly
+- **UI**: React + Mapbox GL (SubSurface-UI)

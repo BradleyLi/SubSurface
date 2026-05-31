@@ -33,7 +33,7 @@ class HarnessSettings(BaseSettings):
 
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
-    streamlit_port: int = 8501
+    ui_port: int = 5173
 
 
 @lru_cache

@@ -1,19 +1,19 @@
 flowchart TB
     subgraph clients["Clients (Browser)"]
         direction LR
-        BrowserUI["Streamlit Dashboard<br/>(rendered HTML/Plotly)"]
+        ReactUI["React UI · SubSurface-UI<br/>(Mapbox GL + Vite)"]
         VoiceUI["Voice Reporting Line UI<br/>(embedded HTML + vanilla JS,<br/>MediaRecorder + fetch)"]
     end
 
-    subgraph streamlit["Streamlit UI · :8501 (app.py + pages/)"]
+    subgraph reactui["React UI · :5173 (SubSurface-UI/)"]
         direction TB
-        Pages["Pages: Risk Map · Decision Engine ·<br/>Cascade Sim · AI Assistant · Watermains"]
-        FE["frontend/ helpers<br/>nav · workflow1_ui · report · order_report_ui"]
-        Styles["app_styles.py (injected CSS)"]
-        APIClient["api_client.py<br/>(urllib → REST, in-process fallback)"]
-        VoiceMatch["agent/voice_pipe_match.py<br/>(transcript → pipe overlay)"]
-        Pages --> FE --> APIClient
-        Pages --> VoiceMatch
+        Map["Map3D · filters · KPIs"]
+        W1Panel["SummaryAgent (W1)"]
+        W2Panel["MultiRoleAnalysis (W2)"]
+        VoiceAlert["CallerReportAlert + SSE listener"]
+        Map --> W1Panel
+        Map --> W2Panel
+        VoiceAlert --> Map
     end
 
     subgraph backend["FastAPI Backend · :8000 (backend/main.py)"]
@@ -22,6 +22,7 @@ flowchart TB
         PipesAPI["/api/pipes, /api/watermains-layer"]
         W1API["/api/pipes/{id}/risk-summary (W1)"]
         W2API["/api/analysis-runs (W2)"]
+        VoiceAPI["/api/voice/match/latest, /api/voice/transcript/latest"]
         AIAPI["/api/ai-response (rule-based)"]
     end
 
@@ -31,6 +32,7 @@ flowchart TB
         GW2["w2_gateway.py · Workflow 2<br/>4 roles + synthesis"]
         Orch["w2_orchestrator.py<br/>(transcript triage)"]
         Proc["procurement/<br/>catalog · selection · BOM"]
+        VoiceMatch["voice_pipe_match.py"]
         Schemas["schemas.py (Pydantic contracts)"]
         GW2 --> Orch
         GW2 --> Proc
@@ -43,9 +45,9 @@ flowchart TB
         HealthChk["health.py"]
     end
 
-    subgraph voice["Voice Bot · :8503 (agent/harness/voice_bot.py)"]
+    subgraph voice["Voice Bot · :8504 (agent/harness/voice_bot.py)"]
         direction TB
-        VBApi["/api/chat-audio, /api/chat,<br/>/api/end, /api/tts-audio"]
+        VBApi["/api/chat-audio, /api/chat,<br/>/api/end, /api/transcript-events"]
         Whisper["faster-whisper (local STT)"]
         TTS["Kokoro / Piper TTS (optional)"]
         VT["voice_transcript.py<br/>(JSON + location extraction)"]
@@ -82,14 +84,14 @@ flowchart TB
         Train --> Predict["predict_xgb_gpu.py"]
     end
 
-    BrowserUI -->|HTTP| streamlit
+    ReactUI -->|HTTP /api| backend
     VoiceUI -->|fetch multipart/JSON| VBApi
-
-    APIClient -->|REST JSON| backend
+    VoiceAlert -.SSE.-> VBApi
 
     PipesAPI --> DataLayer["data_utils · real_data · ml_predictions"]
     W1API --> GW1
     W2API --> GW2
+    VoiceAPI --> VoiceMatch
 
     GW1 --> Client
     GW2 --> Client
@@ -114,4 +116,3 @@ flowchart TB
     GW2 --> AR
     Predict --> MLP
     Predict -.offline.-> CKAN
-    DataLayer -.fallback in-process.-> agent

@@ -2,10 +2,10 @@ sequenceDiagram
     autonumber
     actor Caller
     actor Engineer
-    participant Voice as Voice Bot :8503
+    participant Voice as Voice Bot :8504
     participant W1 as Ollama W1
     participant FS as voice_sessions/
-    participant UI as Streamlit :8501
+    participant UI as React UI :5173
     participant API as FastAPI :8000
     participant GW2 as w2_gateway
     participant W2 as Ollama W2
@@ -17,13 +17,14 @@ sequenceDiagram
     W1-->>Voice: agent reply (+ optional TTS)
     Caller->>Voice: End call
     Voice->>FS: write voice_transcript_*.json
+    Voice-->>UI: SSE transcript event
 
     Note over Engineer,W2: Analyst reviews & runs deep analysis
-    Engineer->>UI: open Risk Map
+    Engineer->>UI: open map
     UI->>API: GET /api/pipes
-    API-->>UI: pipe DataFrame (Toronto + ML risk)
-    UI->>FS: find_pipe_for_latest_transcript()
-    FS-->>UI: matched pipe -> map overlay
+    API-->>UI: pipe network (Toronto + ML risk)
+    UI->>API: GET /api/voice/match/latest
+    API-->>UI: matched pipe + caller alert
     Engineer->>UI: Run multi-role analysis
     UI->>API: POST /api/analysis-runs
     API->>GW2: workflow2_run(pipe_id)
@@ -31,4 +32,4 @@ sequenceDiagram
     GW2->>W2: 4 role reports (parallel) + synthesis
     W2-->>GW2: role reports + action plan + BOM
     GW2->>GW2: save to data/analysis_runs/
-    GW2-->>UI: structured result -> UI tabs
+    GW2-->>UI: structured result → role tabs

@@ -9,9 +9,9 @@ Toggle via the top-nav switch or USE_REAL_DATA env variable.
 
 from __future__ import annotations
 import os
+from functools import lru_cache
 import numpy as np
 import pandas as pd
-import streamlit as st
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ N_PER_WARD = 100   # 600 total pipe segments
 # Data generation
 # ---------------------------------------------------------------------------
 
-@st.cache_data(show_spinner=False)
+@lru_cache(maxsize=4)
 def get_pipes(use_real: bool = True) -> pd.DataFrame:
     """
     Return pipe DataFrame in canonical schema.
@@ -71,7 +71,7 @@ def get_pipes_uncached(use_real: bool = True) -> pd.DataFrame:
     return _get_synthetic_pipes_uncached()
 
 
-@st.cache_data(show_spinner=False)
+@lru_cache(maxsize=1)
 def _get_synthetic_pipes() -> pd.DataFrame:
     return _get_synthetic_pipes_uncached()
 
@@ -259,10 +259,7 @@ Ask me about specific pipes, replacement priorities, or "what-if" scenarios.""",
 }
 
 
-@st.cache_data(
-    show_spinner="Loading Distribution Watermains…",
-    ttl=3600,
-)
+@lru_cache(maxsize=8)
 def get_distribution_watermains(max_features: int | None = 5_000) -> pd.DataFrame:
     """
     Load the Distribution Watermain GeoJSON layer.

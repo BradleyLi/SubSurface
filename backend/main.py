@@ -1,21 +1,25 @@
 """
 FastAPI backend for CityNerve SubSurface.
-Serves pipe/network data and AI responses for the Streamlit frontend.
+Serves pipe/network data and AI workflows for the React UI (SubSurface-UI).
 """
 
 from __future__ import annotations
 
 import json
-from typing import Literal
+from dataclasses import asdict
+from typing import Any, Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agent.gateway import workflow1_summary
 from agent.harness.endpoints import WorkflowProfile
 from agent.harness.health import check_all, check_profile
 from agent.schemas import AnalysisRunRequest
+from agent.voice_context import load_voice_transcript
+from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from agent.w2_gateway import workflow2_run
 from agent.w2_storage import load_file, load_manifest
 from data_utils import get_ai_response, get_distribution_watermains, get_pipes_uncached
@@ -23,6 +27,14 @@ from real_data import get_real_pipes
 
 
 app = FastAPI(title="CityNerve API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _to_records(df: pd.DataFrame) -> list[dict]:
@@ -218,3 +230,45 @@ def api_ai_response(body: AIRequest) -> dict:
         raise HTTPException(status_code=500, detail=f"Failed to generate AI response: {exc}") from exc
 
     return {"response": reply, "context_count": int(len(df))}
+
+
+def _json_safe(value: Any) -> Any:
+    """Convert dataclasses and other objects to JSON-serializable values."""
+    if value is None:
+        return None
+    if hasattr(value, "__dataclass_fields__"):
+        return asdict(value)
+    return value
+
+
+@app.get("/api/voice/transcript/latest")
+def api_voice_transcript_latest(transcript_path: str | None = None) -> dict:
+    """Return the latest (or explicit) voice call transcript JSON."""
+    payload = load_voice_transcript(transcript_path)
+    if payload is None:
+        return {"payload": None}
+    return {"payload": payload}
+
+
+@app.get("/api/voice/match/latest")
+def api_voice_match_latest(
+    use_real: bool = True,
+    transcript_path: str | None = None,
+) -> dict:
+    """Match the latest voice transcript to a pipe in the network."""
+    try:
+        df = get_pipes_uncached(use_real=use_real)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load pipes for voice match: {exc}",
+        ) from exc
+
+    payload, match = find_pipe_for_latest_transcript(
+        df,
+        transcript_path=transcript_path,
+    )
+    return {
+        "payload": payload,
+        "match": _json_safe(match),
+    }

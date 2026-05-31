@@ -153,7 +153,7 @@ _VOICE_DEBUG_AUDIO_DIR = _VOICE_OUTPUT_DIR / "debug_audio"
 _VOICE_MODEL_CACHE_DIR = Path(
     os.getenv("VOICE_MODEL_CACHE_DIR", str(_REPO_ROOT / "voice_models"))
 ).resolve()
-_DEFAULT_PORT = int(os.getenv("VOICE_CHAT_PORT", "8503"))
+_DEFAULT_PORT = int(os.getenv("VOICE_CHAT_PORT", "8504"))
 
 
 def _configure_model_caches() -> None:

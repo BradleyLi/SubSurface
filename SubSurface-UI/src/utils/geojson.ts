@@ -92,6 +92,29 @@ export function riskColorExpression(colorMode: "risk" | "type"): MapboxExpressio
   ];
 }
 
+export function voiceMarkerGeoJSON(
+  lat: number | null | undefined,
+  lon: number | null | undefined,
+): GeoJSON.FeatureCollection {
+  if (lat == null || lon == null) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { kind: "voice-caller" },
+        geometry: {
+          type: "Point",
+          coordinates: [lon, lat],
+        },
+      },
+    ],
+  };
+}
+
 export function lineWidthExpression(colorMode: "risk" | "type"): MapboxExpression {
   if (colorMode === "type") {
     return [

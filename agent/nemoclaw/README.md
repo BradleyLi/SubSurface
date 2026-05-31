@@ -41,5 +41,5 @@ nemoclaw nemotron-3-super recover
 
 ## When to use NemoClaw vs direct Ollama
 
-- **FastAPI / `agent.harness.client`** — low-latency programmatic calls (W1 risk summaries, future W2 routes). Streamlit never calls Ollama directly.
+- **FastAPI / `agent.harness.client`** — low-latency programmatic calls (W1 risk summaries, W2 routes). React UI never calls Ollama directly.
 - **NemoClaw** — multi-step agent investigation, dashboard, `nemoclaw connect` sessions. See [investigate.md](investigate.md).

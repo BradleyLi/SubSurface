@@ -4,6 +4,23 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${ROOT}/.env"
+
+declare -A ENV_OVERRIDES=()
+for name in \
+  WORKFLOW1_OPENAI_BASE_URL \
+  WORKFLOW2_OPENAI_BASE_URL \
+  WORKFLOW1_MODEL \
+  WORKFLOW2_MODEL \
+  NEMOCLAW_W1_SANDBOX \
+  NEMOCLAW_W2_SANDBOX \
+  OPENAI_API_KEY \
+  ENDPOINT_CHECK_CONNECT_TIMEOUT \
+  ENDPOINT_CHECK_MAX_TIME; do
+  if [[ -v "${name}" ]]; then
+    ENV_OVERRIDES["${name}"]="${!name}"
+  fi
+done
+
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   set -a && source "$ENV_FILE" && set +a
@@ -12,6 +29,10 @@ elif [[ -f "${ROOT}/agent/.env.example" ]]; then
   set -a && source "${ROOT}/agent/.env.example" && set +a
 fi
 
+for name in "${!ENV_OVERRIDES[@]}"; do
+  export "${name}=${ENV_OVERRIDES[${name}]}"
+done
+
 W1_URL="${WORKFLOW1_OPENAI_BASE_URL:-http://127.0.0.1:11436/v1}"
 W2_URL="${WORKFLOW2_OPENAI_BASE_URL:-http://127.0.0.1:11434/v1}"
 W1_MODEL="${WORKFLOW1_MODEL:-nemotron-nano:12b-v2}"
@@ -19,6 +40,8 @@ W2_MODEL="${WORKFLOW2_MODEL:-nemotron-3-super:latest}"
 NC_W1="${NEMOCLAW_W1_SANDBOX:-hackathon-w1}"
 NC_W2="${NEMOCLAW_W2_SANDBOX:-nemotron-3-super}"
 API_KEY="${OPENAI_API_KEY:-ollama}"
+CURL_CONNECT_TIMEOUT="${ENDPOINT_CHECK_CONNECT_TIMEOUT:-5}"
+CURL_MAX_TIME="${ENDPOINT_CHECK_MAX_TIME:-20}"
 
 failures=0
 
@@ -29,7 +52,13 @@ check_ollama() {
   local models_url="${base_url%/}/models"
 
   echo "==> Checking ${label} at ${base_url}"
-  if ! response="$(curl -sfS -H "Authorization: Bearer ${API_KEY}" "${models_url}" 2>&1)"; then
+  if ! response="$(
+    curl -sfS \
+      --connect-timeout "${CURL_CONNECT_TIMEOUT}" \
+      --max-time "${CURL_MAX_TIME}" \
+      -H "Authorization: Bearer ${API_KEY}" \
+      "${models_url}" 2>&1
+  )"; then
     echo "FAIL: ${label} unreachable (${models_url})"
     echo "      ${response}"
     failures=$((failures + 1))

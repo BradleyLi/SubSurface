@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+cufile.log
 
 # Local build artifacts (ctranslate2, python dev headers, etc.)
 .build/
@@ -14,9 +15,6 @@ venv_packages/
 env/
 .env
 .venv/
-
-# Streamlit secrets
-.streamlit/secrets.toml
 
 # Workflow 2 analysis artifacts
 data/analysis_runs/

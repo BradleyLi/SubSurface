@@ -7,8 +7,9 @@
 | 11434 | Ollama W2 | `nemotron-3-super:latest` — analysis / multi-role |
 | 11435 | (reserved) | NemoClaw dashboard / proxy if configured |
 | 11436 | Ollama W1 | `nemotron-nano:12b-v2` — fast risk summaries |
-| 8000 | FastAPI | `backend/main.py` — Streamlit calls this only |
-| 8501 | Streamlit | `app.py` multipage UI |
+| 8000 | FastAPI | `backend/main.py` — React UI calls this only |
+| 5173 | React UI | `SubSurface-UI/` (Vite) |
+| 8504 | Voice Reporting Line | `agent/harness/voice_bot.py` |
 
 ## List sandboxes
 
@@ -18,24 +19,16 @@ nemoclaw list
 
 Expected for hackathon demo:
 
-- `hackathon-w1` → Ollama `http://127.0.0.1:11436/v1`
-- `nemotron-3-super` → Ollama `http://127.0.0.1:11434/v1`
+- `hackathon-w1` — W1 summary sandbox
+- `nemotron-3-super` — W2 analysis sandbox
 
-## Direct Ollama vs sandbox
+## Investigation workflow
 
-| Path | Caller | When |
-|------|--------|------|
-| `agent.harness.client.chat(WorkflowProfile.WORKFLOW1, ...)` | FastAPI | Deterministic W1 summary routes, low latency |
-| `agent.harness.client.chat(WorkflowProfile.WORKFLOW2, ...)` | FastAPI | W2 orchestration (future parallel calls) |
-| `nemoclaw connect hackathon-w1` | Human / agent | Interactive investigation, tool use |
-| `nemoclaw connect nemotron-3-super` | Human / agent | Deep analysis sessions |
+1. Reproduce the issue in the relevant sandbox (`nemoclaw hackathon-w1 status`).
+2. Check Ollama endpoints: `./agent/scripts/check_endpoints.sh`
+3. Inspect harness health: `curl http://127.0.0.1:8000/health`
+4. For W2 runs, check `data/analysis_runs/` artifacts.
 
-Streamlit pages under `pages/` and `app.py` should use `api_client.py` / `CITYNERVE_API_URL` — not Ollama URLs.
+## API boundary
 
-## Quick checks
-
-```bash
-./agent/scripts/check_endpoints.sh
-curl -s http://127.0.0.1:11436/v1/models | head
-curl -s http://127.0.0.1:11434/v1/models | head
-```
+Browser clients (React UI) should use FastAPI routes under `/api/*` — not Ollama URLs directly.

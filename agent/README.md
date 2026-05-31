@@ -7,7 +7,7 @@ Shared Ollama client, dual-workflow profiles, and Nemotron gateways for FastAPI.
 ```text
 agent/
 ├── harness/              # settings, endpoints, client, health
-│   ├── voice_bot.py      # standalone push-to-talk voice UI (port 8503)
+│   ├── voice_bot.py      # standalone push-to-talk voice UI (port 8504)
 │   └── voice_transcript.py
 ├── evidence.py           # W1 evidence packet from pipe row + SHAP
 ├── gateway.py            # W1 orchestration
@@ -15,8 +15,7 @@ agent/
 ├── prompts/              # workflow1_system.txt, w2/*.txt
 ├── schemas.py            # Pydantic contracts
 ├── scripts/              # check_endpoints.sh, ollama-dual-serve.example.sh
-├── nemoclaw/             # sandboxes: hackathon-w1, nemotron-3-super
-└── why_failing_agent.py  # legacy rule-based prose (unused; W1 replaces it in UI)
+└── nemoclaw/             # sandboxes: hackathon-w1, nemotron-3-super
 ```
 
 ## Architecture
@@ -34,11 +33,11 @@ agent/
 | `WorkflowProfile.WORKFLOW1` | `:11436` | `nemotron-nano:12b-v2` | JSON risk summary (128K context) |
 | `WorkflowProfile.WORKFLOW2` | `:11434` | `nemotron-3-super:latest` | Multi-role reports + action plan |
 
-Streamlit **never** calls Ollama — only FastAPI (`:8000`).
+React UI and FastAPI clients **never** call Ollama — only FastAPI (`:8000`).
 
 ## Workflow 1
 
-`GET /api/pipes/{pipe_id}/risk-summary` — Overview **Why Failing Agent** when pipes are selected in the queue (cached in session).
+`GET /api/pipes/{pipe_id}/risk-summary` — Summary Agent in SubSurface-UI when a pipe is selected.
 
 Modules: `schemas.py`, `evidence.py`, `llm_client.py`, `gateway.py`, `template_summary.py`.
 
@@ -109,7 +108,7 @@ Expect several minutes for a live W2 run (5 Super calls).
 
 ## Voice call session
 
-Standalone **CityNerve Reporting Line** (`agent/harness/voice_bot.py`) — not part of Streamlit or FastAPI. Callers report a watermain break; the agent takes notes for emergency dispatch over up to three spoken exchanges.
+Standalone **CityNerve Reporting Line** (`agent/harness/voice_bot.py`) — not part of the React UI or FastAPI. Callers report a watermain break; the agent takes notes for emergency dispatch over up to three spoken exchanges.
 
 ### Prerequisites
 
@@ -155,7 +154,7 @@ CTranslate2, CUDA, and cuDNN library paths needed by the CUDA-enabled
 
 The server prints the client URL, transcript directory, LLM profile, and TTS engine on startup. Default client URL:
 
-**http://0.0.0.0:8503/client/** (open it from another machine as `http://<server-ip>:8503/client/`)
+**http://0.0.0.0:8504/client/** (open it from another machine as `http://<server-ip>:8504/client/`)
 
 Override host/port with `VOICE_CHAT_HOST`, `VOICE_CHAT_PORT`, or CLI flags `--host` / `--port`.
 
@@ -191,8 +190,8 @@ The transcript contains caller and agent turns (no system prompt), session metad
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VOICE_CHAT_HOST` | `0.0.0.0` | Bind address |
-| `VOICE_CHAT_PORT` | `8503` | HTTP port |
-| `VOICE_TRANSCRIPT_EVENTS_URL` | same hostname as Streamlit, port `8503` | Browser SSE URL for transcript-created rerenders |
+| `VOICE_CHAT_PORT` | `8504` | HTTP port |
+| `VOICE_TRANSCRIPT_EVENTS_URL` | same hostname as UI, port `8504` (or Vite proxy `/voice-events`) | Browser SSE URL for transcript-created events |
 | `VOICE_OUTPUT_DIR` | `voice_sessions` | Transcript output directory |
 | `VOICE_MAX_USER_TURNS` | `3` | Max caller exchanges |
 | `VOICE_MAX_TOKENS` | `3000` | LLM reply token limit |
@@ -329,15 +328,11 @@ PY
 | Service | Default port |
 |---------|--------------|
 | FastAPI | 8000 |
-| Streamlit | 8501 |
-| Voice call (Reporting Line) | 8503 |
+| React UI (Vite) | 5173 |
+| Voice call (Reporting Line) | 8504 |
 | Ollama W2 | 11434 |
 | Ollama W1 | 11436 |
 
 ## NemoClaw
 
 See [nemoclaw/README.md](nemoclaw/README.md) and [nemoclaw/investigate.md](nemoclaw/investigate.md).
-
-## Legacy
-
-- `why_failing_agent.py` — deprecated; UI uses Workflow 1 via `frontend/workflow1_ui.py`

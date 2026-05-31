@@ -1,35 +1,41 @@
 # SubSurface-UI
 
-React front-end for CityNerve SubSurface with a **Mapbox GL 3D map** (light mode) as the full-screen background and a sidebar for filters plus a critical-priority pipe table.
+React front-end for CityNerve SubSurface with a **Mapbox GL 3D map** (light mode) as the full-screen background and a sidebar for filters, AI agents, and voice caller reports.
 
-The existing Streamlit app in `../SubSurface/` is unchanged.
+This is the **primary UI** for the demo stack started by `./scripts/run_citynerve.sh`.
 
 ## Prerequisites
 
-1. **CityNerve API** running (from `SubSurface/`):
+1. **Full stack** from `SubSurface/` (API + this UI + voice line + Ollama):
 
    ```bash
    cd ../SubSurface
+   cp SubSurface-UI/.env.example SubSurface-UI/.env   # set VITE_MAPBOX_TOKEN
    ./scripts/run_citynerve.sh
-   # or: uvicorn backend.main:app --host 127.0.0.1 --port 8000
    ```
 
-2. **Mapbox access token** — [create one free](https://account.mapbox.com/access-tokens/)
+   Or run **API only**, then start the UI yourself:
 
-## Setup
+   ```bash
+   uvicorn backend.main:app --host 127.0.0.1 --port 8000
+   cd SubSurface-UI && npm install && npm run dev
+   ```
+
+2. **Mapbox access token** — [create one free](https://account.mapbox.com/access-tokens/) in `SubSurface-UI/.env`
+
+## Setup (UI only)
 
 ```bash
 cd SubSurface-UI
 cp .env.example .env
-# Edit .env and set VITE_MAPBOX_TOKEN=pk....
-
+# Edit .env: VITE_MAPBOX_TOKEN=pk....
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173
+Open http://localhost:5173 (or the `UI_PORT` from `run_citynerve.sh`)
 
-The Vite dev server proxies `/api` and `/health` to `http://127.0.0.1:8000`.
+The Vite dev server proxies `/api` and `/health` to `http://127.0.0.1:8000`, and `/voice-events` to the voice server (default `:8504`).
 
 ## Features
 
@@ -38,6 +44,9 @@ The Vite dev server proxies `/api` and `/health` to `http://127.0.0.1:8000`.
 - **Sidebar filters** — risk level, material, ward, pipe type, min risk score
 - **Critical Priority Queue** — top 100 critical pipes by network percentile
 - **Click-to-inspect** — select a pipe on map or table to fly-to and view details
+- **Workflow 1 (Summary Agent)** — Nemotron JSON risk summary on pipe select
+- **Workflow 2 (Multi-Role Analysis)** — Engineer/Police/Field/Operations + synthesis + BoM
+- **Voice integration** — caller report alert, map marker, SSE refresh, W2 transcript context
 
 ## Production build
 

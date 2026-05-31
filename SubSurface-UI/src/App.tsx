@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Pipe } from "./types/pipe";
 import { usePipes } from "./hooks/usePipes";
+import { useVoiceMatch } from "./hooks/useVoiceMatch";
 import Map3D from "./components/Map3D";
 import FilterPanel from "./components/FilterPanel";
 import CriticalTable from "./components/CriticalTable";
 import PipeDetail from "./components/PipeDetail";
 import SummaryAgent from "./components/SummaryAgent";
+import MultiRoleAnalysis from "./components/MultiRoleAnalysis";
+import CallerReportAlert from "./components/CallerReportAlert";
 import KpiBar from "./components/KpiBar";
 
 export default function App() {
@@ -13,6 +16,7 @@ export default function App() {
     loading,
     error,
     source,
+    pipes,
     filters,
     updateFilters,
     resetFilters,
@@ -26,11 +30,24 @@ export default function App() {
     riskLevels,
   } = usePipes();
 
+  const { voiceMatch } = useVoiceMatch(pipes, true);
   const [selectedPipe, setSelectedPipe] = useState<Pipe | null>(null);
+  const [useMatchedVoicePipe, setUseMatchedVoicePipe] = useState(true);
 
   const handleSelectPipe = (pipe: Pipe | null) => {
     setSelectedPipe(pipe);
   };
+
+  // Auto-select matched voice pipe when a new caller report arrives
+  useEffect(() => {
+    const match = voiceMatch?.match;
+    if (!match || !useMatchedVoicePipe) return;
+
+    const matched = pipes.find((p) => p.pipe_id === match.pipe_id);
+    if (matched) {
+      setSelectedPipe(matched);
+    }
+  }, [voiceMatch?.match?.pipe_id, useMatchedVoicePipe, pipes, voiceMatch?.match]);
 
   return (
     <div className="app">
@@ -39,6 +56,7 @@ export default function App() {
         colorMode={filters.colorMode}
         selectedPipe={selectedPipe}
         onSelectPipe={handleSelectPipe}
+        voiceMatch={voiceMatch?.match ?? null}
       />
 
       <aside className="sidebar">
@@ -80,6 +98,13 @@ export default function App() {
                 source={source}
               />
 
+              <CallerReportAlert
+                voiceMatch={voiceMatch}
+                selectedPipeId={selectedPipe?.pipe_id ?? null}
+                useMatchedPipe={useMatchedVoicePipe}
+                onUseMatchedPipeChange={setUseMatchedVoicePipe}
+              />
+
               <FilterPanel
                 filters={filters}
                 materials={materials}
@@ -97,6 +122,13 @@ export default function App() {
               />
 
               <SummaryAgent pipe={selectedPipe} useReal />
+
+              <MultiRoleAnalysis
+                pipe={selectedPipe}
+                useReal
+                voiceMatch={voiceMatch}
+                useMatchedVoicePipe={useMatchedVoicePipe}
+              />
 
               <CriticalTable
                 rows={criticalTableRows}

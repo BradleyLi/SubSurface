@@ -1,7 +1,7 @@
 # SubSurface: Product & Technical Specification
 **Project:** Predictive Infrastructure Intelligence for Municipal Water Networks
 **Event:** NVIDIA Spark Hack - Toronto
-**Tech Stack:** NVIDIA DGX Spark, Nemotron, RAPIDS (cuDF, cuSpatial, cuML, cuGraph), Python, MapLibre GL JS, React/Streamlit.
+**Tech Stack:** NVIDIA DGX Spark, Nemotron, RAPIDS (cuDF, cuSpatial, cuML, cuGraph), Python, React, Mapbox GL JS.
 
 ---
 
@@ -81,7 +81,7 @@ Instead of sequential bounding boxes, parallel GPU threads calculate spatial int
 
 ## 6. UI/UX Workflow (The Demo Experience)
 
-**Frontend Tech:** React (or Streamlit for speed) + MapLibre GL JS / Deck.gl.
+**Frontend Tech:** React (SubSurface-UI) + Mapbox GL JS.
 **Golden Path Scope:** The live UI is geofenced to one dramatic, decision-critical neighborhood scenario (e.g., high-risk pipe near critical services) to guarantee smooth demo execution.
 
 1.  **The Briefing:** Sidebar displays Nemotron's proactive alert based on overnight data (e.g., "14 new Utility Cuts detected on Bloor St.").

@@ -58,7 +58,7 @@ Details: [agent/nemoclaw/README.md](agent/nemoclaw/README.md)
 1. Ollama W2 + W1 (11434, 11436)
 2. `nemoclaw hackathon-w1 status` and `nemoclaw nemotron-3-super status`
 3. FastAPI: `uvicorn backend.main:app --host 127.0.0.1 --port 8000`
-4. Streamlit: `streamlit run app.py --server.port 8501`
+4. React UI: `cd SubSurface-UI && npm run dev` (or `./scripts/run_citynerve.sh` for full stack)
 
 Copy env: `cp agent/.env.example .env`
 
@@ -73,4 +73,4 @@ from agent.harness.endpoints import WorkflowProfile
 # summary_text = await chat(WorkflowProfile.WORKFLOW1, messages=[...], max_tokens=256)
 ```
 
-Streamlit calls FastAPI only (`CITYNERVE_API_URL` / port 8000), never Ollama directly.
+React UI and other clients call FastAPI only (`CITYNERVE_API_URL` / port 8000), never Ollama directly.

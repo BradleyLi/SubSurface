@@ -23,7 +23,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-import streamlit as st
+from functools import lru_cache
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -279,10 +279,7 @@ def _add_supplemental_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-@st.cache_data(
-    show_spinner="Loading Transmission & Distribution Watermains…",
-    ttl=3600,
-)
+@lru_cache(maxsize=8)
 def get_real_pipes(max_dist: int = MAX_DIST_FEATURES) -> pd.DataFrame:
     """
     Load Transmission + Distribution watermain GeoJSON and return a DataFrame
