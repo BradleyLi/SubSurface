@@ -19,18 +19,64 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON=python3
 fi
 
+prepend_ld_library_path() {
+  local dir="$1"
+  if [[ -d "$dir" ]]; then
+    case ":${LD_LIBRARY_PATH:-}:" in
+      *":$dir:"*) ;;
+      *) export LD_LIBRARY_PATH="$dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
+    esac
+  fi
+}
+
+prepend_ld_library_path "$ROOT/.build/ctranslate2-cuda/install/lib"
+prepend_ld_library_path "/usr/local/cuda/lib64"
+
+CUDNN_LIB_DIR="$("$PYTHON" - <<'PY' 2>/dev/null || true
+import importlib
+
+try:
+    cudnn_lib = importlib.import_module("nvidia.cudnn.lib")
+except Exception:
+    raise SystemExit
+
+paths = list(getattr(cudnn_lib, "__path__", []))
+if paths:
+    print(paths[0])
+PY
+)"
+prepend_ld_library_path "$CUDNN_LIB_DIR"
+
 OLLAMA_BIN="${OLLAMA_BIN:-ollama}"
 OLLAMA_MODELS="${OLLAMA_MODELS:-${HOME}/.ollama/models}"
 export OLLAMA_MODELS
 STREAMLIT_HOST="${STREAMLIT_HOST:-0.0.0.0}"
 VOICE_CHAT_HOST="${VOICE_CHAT_HOST:-0.0.0.0}"
 
-find_free_port() {
+# Static app ports. Edit these defaults, or override per run:
+#   FASTAPI_PORT=8000 STREAMLIT_PORT=8501 VOICE_CHAT_PORT=8503 ./scripts/run_citynerve.sh
+FASTAPI_PORT="${FASTAPI_PORT:-8000}"
+STREAMLIT_PORT="${STREAMLIT_PORT:-8501}"
+VOICE_CHAT_PORT="${VOICE_CHAT_PORT:-8503}"
+export FASTAPI_PORT STREAMLIT_PORT VOICE_CHAT_PORT
+
+port_in_use() {
   local port="$1"
-  while ss -tln 2>/dev/null | grep -q ":${port} "; do
-    port=$((port + 1))
-  done
-  echo "$port"
+  "$PYTHON" - "$port" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind(("0.0.0.0", port))
+except OSError:
+    raise SystemExit(0)
+finally:
+    sock.close()
+
+raise SystemExit(1)
+PY
 }
 
 PID_W1=""
@@ -43,8 +89,27 @@ PID_VOICE=""
 
 port_listening() {
   local port="$1"
-  ss -tln 2>/dev/null | grep -q ":${port} " || \
-    curl -sf "http://127.0.0.1:${port}/api/version" >/dev/null 2>&1
+  port_in_use "$port"
+}
+
+require_port_available() {
+  local port="$1"
+  local label="$2"
+
+  if port_listening "${port}"; then
+    echo "ERROR: configured ${label} port :${port} is already in use." >&2
+    echo "Set ${label}_PORT to a free static port, or run '$0 --stop' to stop known services." >&2
+    exit 1
+  fi
+}
+
+require_distinct_ports() {
+  if [[ "${FASTAPI_PORT}" == "${STREAMLIT_PORT}" \
+      || "${FASTAPI_PORT}" == "${VOICE_CHAT_PORT}" \
+      || "${STREAMLIT_PORT}" == "${VOICE_CHAT_PORT}" ]]; then
+    echo "ERROR: FASTAPI_PORT, STREAMLIT_PORT, and VOICE_CHAT_PORT must be distinct." >&2
+    exit 1
+  fi
 }
 
 wait_for_port() {
@@ -55,6 +120,31 @@ wait_for_port() {
 
   echo "Waiting for ${label} on :${port} (timeout ${timeout}s)..."
   while (( elapsed < timeout )); do
+    if port_listening "${port}"; then
+      echo "  ${label} ready on :${port}"
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  echo "ERROR: ${label} did not become ready on :${port} within ${timeout}s" >&2
+  return 1
+}
+
+wait_for_started_service() {
+  local pid="$1"
+  local port="$2"
+  local label="$3"
+  local timeout="${4:-30}"
+  local elapsed=0
+
+  echo "Waiting for ${label} on :${port} (timeout ${timeout}s)..."
+  while (( elapsed < timeout )); do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      echo "ERROR: ${label} exited during startup." >&2
+      wait "${pid}" 2>/dev/null || true
+      return 1
+    fi
     if port_listening "${port}"; then
       echo "  ${label} ready on :${port}"
       return 0
@@ -166,14 +256,10 @@ if [[ -x "${ROOT}/agent/scripts/check_endpoints.sh" ]]; then
   fi
 fi
 
-FASTAPI_PORT=$(find_free_port "${FASTAPI_PORT:-8000}")
-STREAMLIT_PORT=$(find_free_port "${STREAMLIT_PORT:-8501}")
-VOICE_CHAT_PORT=$(find_free_port "${VOICE_CHAT_PORT:-8503}")
-export FASTAPI_PORT STREAMLIT_PORT VOICE_CHAT_PORT
-
-[[ "${FASTAPI_PORT}"   != "8000" ]] && echo "WARN: port 8000 busy — FastAPI on :${FASTAPI_PORT}"   >&2
-[[ "${STREAMLIT_PORT}" != "8501" ]] && echo "WARN: port 8501 busy — Streamlit on :${STREAMLIT_PORT}" >&2
-[[ "${VOICE_CHAT_PORT}" != "8503" ]] && echo "WARN: port 8503 busy — Voice on :${VOICE_CHAT_PORT}"  >&2
+require_distinct_ports
+require_port_available "${FASTAPI_PORT}" "FASTAPI"
+require_port_available "${STREAMLIT_PORT}" "STREAMLIT"
+require_port_available "${VOICE_CHAT_PORT}" "VOICE_CHAT"
 
 echo ""
 echo "==> Starting FastAPI (uvicorn)"
@@ -188,7 +274,9 @@ echo "==> Starting Voice Reporting Line"
 "$PYTHON" agent/harness/voice_bot.py --host "${VOICE_CHAT_HOST}" --port "${VOICE_CHAT_PORT}" &
 PID_VOICE=$!
 
-sleep 2
+wait_for_started_service "${PID_UVICORN}" "${FASTAPI_PORT}" "FastAPI" 30
+wait_for_started_service "${PID_STREAMLIT}" "${STREAMLIT_PORT}" "Streamlit" 30
+wait_for_started_service "${PID_VOICE}" "${VOICE_CHAT_PORT}" "Voice Reporting Line" 30
 
 cat <<EOF
 
