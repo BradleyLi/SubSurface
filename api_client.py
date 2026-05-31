@@ -13,6 +13,8 @@ import urllib.request
 import pandas as pd
 import streamlit as st
 
+from agent.gateway import workflow1_summary as _local_workflow1_summary
+from agent.w2_gateway import workflow2_run_sync as _local_workflow2_run
 from data_utils import get_ai_response as _local_ai_response
 from data_utils import get_distribution_watermains as _local_distribution
 from data_utils import get_pipes as _local_get_pipes
@@ -91,6 +93,54 @@ def get_watermains_layer_api(
         if layer_mode == "Transmission":
             return all_real[all_real["pipe_type"] == "Transmission"].copy()
         return all_real[all_real["pipe_type"].isin(["Distribution", "Transmission"])].copy()
+
+
+def get_workflow2_health_api() -> dict:
+    try:
+        return _request_json("/health/workflow2", timeout=15)
+    except Exception:
+        return {"ok": False, "detail": "backend unavailable"}
+
+
+def post_analysis_run_api(pipe_id: str, use_real: bool = False) -> dict:
+    """Workflow 2 multi-role analysis (may take several minutes)."""
+    try:
+        return _request_json(
+            "/api/analysis-runs",
+            payload={"pipe_id": pipe_id, "use_real": use_real},
+            timeout=900,
+        )
+    except Exception:
+        _warn_once(
+            f"Backend unavailable at {API_BASE_URL}. Running Workflow 2 in-process.",
+            key="analysis_run",
+        )
+        result = _local_workflow2_run(pipe_id, use_real=use_real)
+        return result.model_dump()
+
+
+def get_analysis_run_api(run_id: str) -> dict:
+    return _request_json(
+        f"/api/analysis-runs/{urllib.parse.quote(run_id, safe='')}",
+        timeout=30,
+    )
+
+
+def get_risk_summary_api(pipe_id: str, use_real: bool = False) -> dict:
+    """Workflow 1 Nemotron risk summary for one pipe."""
+    try:
+        return _request_json(
+            f"/api/pipes/{urllib.parse.quote(pipe_id, safe='')}/risk-summary",
+            query={"use_real": str(use_real).lower()},
+            timeout=180,
+        )
+    except Exception:
+        _warn_once(
+            f"Backend unavailable at {API_BASE_URL}. Using in-process Nemotron gateway.",
+            key="risk_summary",
+        )
+        result = _local_workflow1_summary(pipe_id, use_real=use_real)
+        return result.model_dump()
 
 
 def get_ai_response_api(

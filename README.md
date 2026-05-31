@@ -14,10 +14,16 @@ Built for the NVIDIA Spark Hackathon — Toronto.
 4. Streamlit UI (calls FastAPI only, not Ollama)
 
 ```bash
-cp agent/.env.example .env   # optional; defaults match GX10 hackathon setup
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# Nemotron W1/W2 — root .env.example (WORKFLOW1/2); agent/.env.example adds NemoClaw ports
+cp .env.example .env
+
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+**Workflow 1 PoC:** `GET /api/pipes/{pipe_id}/risk-summary?use_real=false` — Nemotron JSON summary from local evidence packet.
 
 In a second terminal:
 
@@ -64,9 +70,9 @@ Notes:
 | Page | Description |
 |---|---|
 | `app.py` | Command Center — KPIs, pipeline status, top critical pipes |
-| `pages/1_Risk_Map.py` | Interactive risk map — pipe segments coloured by 12-month break probability + SHAP explainability |
-| `pages/2_Cascade_Simulator.py` | Cascade Failure Simulator — "If pipe X breaks, what goes down?" |
-| `pages/3_Decision_Engine.py` | Priority queue — ranked replacement list, cost-benefit analysis, Nemotron work order generator |
+| `pages/1_Risk_Map.py` | Risk map — SHAP explainability, Workflow 2 multi-role analysis (W1 on Overview queue) |
+| `pages/2_Decision_Engine.py` | Priority queue — ranked replacement list, cost-benefit analysis |
+| `pages/3_Cascade_Simulator.py` | Cascade Failure Simulator — "If pipe X breaks, what goes down?" |
 | `pages/4_AI_Assistant.py` | AI chat interface — NIM/Nemotron natural language Q&A |
 
 ## Tech Stack

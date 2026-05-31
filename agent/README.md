@@ -1,96 +1,92 @@
-# Agent harness
+# Agent layer (harness + Workflow 1 + Workflow 2)
 
-Shared config and Ollama client for FastAPI LLM routes. Scaffolding for dual-workflow hackathon demo on GX10.
+Shared Ollama client, dual-workflow profiles, and Nemotron gateways for FastAPI. GX10 dual-Ollama setup: [GX10-Nemotron-Ollama-Cheatsheet.md](../GX10-Nemotron-Ollama-Cheatsheet.md).
 
 ## Layout
 
 ```text
 agent/
-├── .env.example          # copy to repo root .env
-├── harness/
-│   ├── settings.py       # pydantic-settings from .env
-│   ├── endpoints.py      # WorkflowProfile.WORKFLOW1 | WORKFLOW2
-│   ├── client.py         # async chat() → Ollama /v1/chat/completions
-│   └── health.py         # check_all(), check_profile()
-├── scripts/
-│   ├── check_endpoints.sh
-│   └── ollama-dual-serve.example.sh
-├── nemoclaw/             # fixed sandboxes: hackathon-w1, nemotron-3-super
-└── why_failing_agent.py  # deterministic narrative (no LLM)
+├── harness/              # settings, endpoints, client, health
+├── evidence.py           # W1 evidence packet from pipe row + SHAP
+├── gateway.py            # W1 orchestration
+├── w2_gateway.py         # W2 multi-role + synthesis
+├── prompts/              # workflow1_system.txt, w2/*.txt
+├── schemas.py            # Pydantic contracts
+├── scripts/              # check_endpoints.sh, ollama-dual-serve.example.sh
+├── nemoclaw/             # sandboxes: hackathon-w1, nemotron-3-super
+└── why_failing_agent.py  # legacy rule-based prose (unused; W1 replaces it in UI)
 ```
 
-## Quick start
+## Architecture
 
-GX10 uses `python3` (not `python`) and PEP 668 — use a venv:
+| Layer | Location | Role |
+|-------|----------|------|
+| Harness | `agent/harness/` | Dual Ollama profiles, async client, health |
+| W1 | `gateway.py`, `evidence.py`, `w1_prompts.py` | Fast JSON pipe summary (Nano :11436) |
+| W2 | `w2_gateway.py`, `w2_prompts.py`, `prompts/w2/` | Multi-role + synthesis (Super :11434) |
+
+## Workflow profiles
+
+| Profile | Ollama | Model | Output |
+|---------|--------|-------|--------|
+| `WorkflowProfile.WORKFLOW1` | `:11436` | `nemotron-nano:12b-v2` | JSON risk summary (128K context) |
+| `WorkflowProfile.WORKFLOW2` | `:11434` | `nemotron-3-super:latest` | Multi-role reports + action plan |
+
+Streamlit **never** calls Ollama — only FastAPI (`:8000`).
+
+## Workflow 1
+
+`GET /api/pipes/{pipe_id}/risk-summary` — Overview **Why Failing Agent** when pipes are selected in the queue (cached in session).
+
+Modules: `schemas.py`, `evidence.py`, `llm_client.py`, `gateway.py`, `template_summary.py`.
+
+## Workflow 2
+
+`POST /api/analysis-runs` with `{"pipe_id": "...", "use_real": false}`
+
+1. Build `AnalysisPacket` from pipe row
+2. Four parallel Super calls (Engineer, Police, Field, Operations) — prompts in `prompts/w2/`
+3. Synthesis → `final_summary.md` + `action_plan.json`
+4. Artifacts under `data/analysis_runs/{run_id}/`
+
+Risk Map: **Run multi-role analysis (Super)** (manual; does not auto-run).
+
+Set `W2_PARALLEL=false` for sequential roles if GPU memory is tight.
+
+## Config
+
+Copy [`.env.example`](../.env.example) to repo root `.env` (WORKFLOW1/2, `W2_PARALLEL`).
+
+Optional [`.env.example`](.env.example) in this folder adds NemoClaw sandbox names and port defaults.
+
+## Health
+
+- `GET /health` — both workflows
+- `GET /health/workflow1` / `GET /health/workflow2`
+
+Verify Ollama: `./agent/scripts/check_endpoints.sh`
+
+## Quick start (GX10)
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp agent/.env.example .env
-./agent/scripts/check_endpoints.sh   # after Ollama is running
+cp .env.example .env
+./agent/scripts/check_endpoints.sh   # after dual Ollama is running
 ```
 
-GX10 dual-Ollama setup: [GX10-Nemotron-Ollama-Cheatsheet.md](../GX10-Nemotron-Ollama-Cheatsheet.md)
+## Tests
 
-## Workflow profiles
-
-| Profile | Ollama | Model | Context window | Output | Default `max_tokens` |
-|---------|--------|-------|----------------|--------|----------------------|
-| `WorkflowProfile.WORKFLOW1` | `:11436` | `nemotron-nano:12b-v2` | **128K** (incl. VL variant) | 2–3 sentence risk summary | 256 |
-| `WorkflowProfile.WORKFLOW2` | `:11434` | `nemotron-3-super:latest` | model default | Multi-page analysis report | 1,000,000 |
-
-W1 JSON table inputs + the summary reply must fit within the 128K context window. With typical pipe/SHAP tables this is ample headroom.
-
-## FastAPI integration
-
-Streamlit **never** calls Ollama. It uses `backend/` (port 8000). FastAPI selects JSON tables and calls Workflow 1:
-
-```python
-from agent.harness import (
-    TABLE_PIPE_PROFILE,
-    TABLE_SHAP,
-    summarize,
-)
-
-# Build tables from pipe row, SHAP dict, etc.
-summary = await summarize(
-    {
-        TABLE_PIPE_PROFILE: [pipe_record],       # one row from /api/pipes
-        TABLE_SHAP: shap_rows,                    # optional feature contributions
-        "network_context": [network_stats_row],  # any extra selected tables
-    }
-)
+```bash
+.venv/bin/pytest agent/tests/ -v
 ```
 
-Suggested table keys: `pipe_profile`, `risk_drivers`, `shap_drivers`, `network_context`, `cascade_impact`. Pass only the tables relevant to the summary.
-
-Low-level transport (Workflow 2 or custom prompts):
-
-```python
-from agent.harness.client import chat
-from agent.harness.endpoints import WorkflowProfile
-
-report = await chat(
-    WorkflowProfile.WORKFLOW2,
-    messages=[{"role": "user", "content": "Produce a full multi-section analysis report."}],
-)
-```
-
-Future routes (not implemented yet): `/pipes/{id}/risk-summary`, `/analysis-runs`.
-
-## Ports
-
-| Service | Default port |
-|---------|--------------|
-| FastAPI | 8000 |
-| Streamlit | 8501 |
-| Ollama W2 | 11434 |
-| Ollama W1 | 11436 |
+Expect several minutes for a live W2 run (5 Super calls).
 
 ## NemoClaw
 
 See [nemoclaw/README.md](nemoclaw/README.md) and [nemoclaw/investigate.md](nemoclaw/investigate.md).
 
-## Existing modules
+## Legacy
 
-- `why_failing_agent.py` — rule-based failure explanations (used today without LLM)
+- `why_failing_agent.py` — deprecated; UI uses Workflow 1 via `frontend/workflow1_ui.py`

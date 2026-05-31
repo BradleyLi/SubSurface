@@ -3,7 +3,6 @@ app.py — CityNerve SubSurface · Unified Workflow
 Single-page flow: Risk Map → Decision Engine (Priority Queue + Cost-Benefit + Work Orders)
 """
 
-import time
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
@@ -21,33 +20,31 @@ from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils import get_shap, RISK_COLORS, MATERIAL_RISK
 from model import failure_summary
-from agent import agent_failure_explanation
+from frontend.nav import render_top_nav
+from frontend.order_report_ui import render_order_report_panel
+from frontend.report import (
+    MAX_NEMOTRON_PIPES,
+    build_order_report_view_model,
+    build_work_order_text,
+)
+from frontend.workflow1_ui import render_pipe_summaries_panel
 
 inject_css()
-
-# ── Hide sidebar entirely on main workflow page ─────────────────────────────
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"]    { display: none !important; }
-    [data-testid="stSidebarNav"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ── Session state defaults ─────────────────────────────────────────────────
 for _k, _v in [
     ("selected_pipe_ids", []),
     ("generated_report", None),
+    ("generated_report_vm", None),
+    ("report_generating", False),
     ("generated_wo", None),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
-# ── Load data ──────────────────────────────────────────────────────────────
-df = get_pipes_api(use_real=st.session_state.get("use_real_data", False))
+# ── Top nav + data ─────────────────────────────────────────────────────────
+use_real = render_top_nav("overview")
+df = get_pipes_api(use_real=use_real)
 
 pipe_types_available = sorted(df["pipe_type"].unique()) if "pipe_type" in df.columns else []
 has_layers = len(pipe_types_available) > 1
@@ -55,41 +52,6 @@ TYPE_COLORS = {"Transmission": "#1de9b6", "Distribution": "#4fc3f7", "Synthetic"
 TYPE_WIDTHS = {"Transmission": 3.5, "Distribution": 1.8, "Synthetic": 2.0}
 
 # ── Failure reason model + agent narrative imported from dedicated modules ──
-
-# ════════════════════════════════════════════════════════════════════════════
-# TOP NAV
-# ════════════════════════════════════════════════════════════════════════════
-logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
-
-with logo_col:
-    st.markdown(
-        '<div class="cn-topnav">'
-        '<div class="cn-nav-logo">CITY<span>NERVE</span>'
-        '<span class="cn-nav-sub"> SubSurface Intelligence</span>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
-with nav1:
-    st.page_link("app.py", label="🏠 Overview")
-with nav2:
-    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
-with nav3:
-    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
-with nav4:
-    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
-with toggle_col:
-    use_real = st.toggle(
-        "🌐 Toronto Open Data",
-        value=st.session_state.get("use_real_data", False),
-        key="use_real_data",
-        help=(
-            "Fetches live GeoJSON from open.toronto.ca — "
-            "Transmission (~400 features) + Distribution (~3 000 sampled). "
-            "Requires internet. First load ~15s, then cached 1 hr."
-        ),
-    )
-
-st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
 # ── KPI Row ────────────────────────────────────────────────────────────────
 critical_count = int((df["risk_level"] == "Critical").sum())
@@ -118,6 +80,11 @@ st.markdown(
     '<span class="section-flow-sub"> · Pipe segments coloured by predicted 12-month break probability</span>'
     '</div>',
     unsafe_allow_html=True,
+)
+st.page_link(
+    "pages/1_Risk_Map.py",
+    label="Open full Risk Map (SHAP + multi-role W2)",
+    icon="🗺️",
 )
 
 map_col, filter_col = st.columns([3, 1], gap="medium")
@@ -412,21 +379,29 @@ with tab1:
                 ranked[ranked["risk_level"].astype(str) == "Critical"]["pipe_id"].tolist()
             )
             st.session_state.generated_report = None
+            st.session_state.generated_report_vm = None
+            st.session_state.report_generating = False
             st.rerun()
     with qs1:
         if st.button("Budget Picks", key="qs_budget"):
             st.session_state.selected_pipe_ids = ranked[ranked["in_budget"]]["pipe_id"].tolist()
             st.session_state.generated_report = None
+            st.session_state.generated_report_vm = None
+            st.session_state.report_generating = False
             st.rerun()
     with qs2:
         if st.button("Top 10", key="qs_top10"):
             st.session_state.selected_pipe_ids = ranked.head(10)["pipe_id"].tolist()
             st.session_state.generated_report = None
+            st.session_state.generated_report_vm = None
+            st.session_state.report_generating = False
             st.rerun()
     with qs3:
         if st.button("Clear All", key="qs_clear"):
             st.session_state.selected_pipe_ids = []
             st.session_state.generated_report = None
+            st.session_state.generated_report_vm = None
+            st.session_state.report_generating = False
             st.rerun()
 
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
@@ -479,44 +454,23 @@ with tab1:
         st.session_state.selected_pipe_ids = sel_pipe_ids
         st.rerun()
 
-    with agent_col:
-        section_title("🤖 Why Failing Agent")
-        st.caption(
-            "Human-readable diagnosis for checked pipes. "
-            "Select rows in the queue to update this panel."
-        )
-        if sel_pipe_ids:
-            selected_for_agent = ranked[ranked["pipe_id"].isin(sel_pipe_ids)].head(4)
-            for _, r in selected_for_agent.iterrows():
-                lvl = str(r["risk_level"])
-                lvl_color = RISK_COLORS.get(lvl, "#8faabf")
-                st.markdown(
-                    f"""
-                    <div class="cn-card" style="margin-bottom:.5rem;border-left:3px solid {lvl_color}">
-                        <div class="cn-card-title">{r["pipe_id"]} · {lvl}</div>
-                        <div style="font-size:.78rem;line-height:1.45;color:#c9d8ea">
-                            {agent_failure_explanation(r)}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            if len(sel_pipe_ids) > len(selected_for_agent):
-                st.caption(f"Showing first {len(selected_for_agent)} selected pipes.")
-        else:
-            st.markdown(
-                """
-                <div class="cn-card" style="border-style:dashed">
-                    <div style="font-size:.8rem;color:#8faabf;line-height:1.5">
-                        The agent is waiting for your selection.<br>
-                        Check one or more pipes in the table to get a narrative explanation.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
     n_sel = len(sel_pipe_ids)
+
+    with agent_col:
+        section_title("Pipe Summaries")
+        st.caption(
+            "Workflow 1 · Nemotron Nano (:11436). One summary card per selected pipe; "
+            "badge shows ● Nemotron W1 when ready (~20–50s)."
+        )
+        selected_for_agent = (
+            ranked[ranked["pipe_id"].isin(sel_pipe_ids)] if sel_pipe_ids else ranked.iloc[0:0]
+        )
+        render_pipe_summaries_panel(
+            selected_for_agent,
+            use_real=use_real,
+            df=de_df,
+            max_cards=4,
+        )
 
     if n_sel == 0:
         st.markdown(
@@ -538,7 +492,12 @@ with tab1:
         roi_pct     = (sel_savings / max(sel_cost, 1)) * 100
 
         st.markdown("<br>", unsafe_allow_html=True)
-        section_title(f"{n_sel} Pipe(s) Selected — Summary")
+        section_title(f"{n_sel} Pipe(s) Selected — Capital Program")
+        st.caption(
+            "Selection totals and queue detail below. "
+            "Per-pipe Nemotron summaries are in **Pipe Summaries** (right). "
+            "Click **Generate Order Report** for the full capital works report."
+        )
 
         sm1, sm2, sm3, sm4 = st.columns(4)
         sm1.metric("Selected Pipes",    f"{n_sel}")
@@ -598,62 +557,51 @@ with tab1:
             )
 
         if gen_report:
-            with st.spinner("Generating capital works order report..."):
-                time.sleep(0.8)
+            st.session_state.report_generating = True
+            st.session_state.generated_report_vm = None
+            st.session_state.generated_report = None
+            st.rerun()
 
-            report_lines = [
-                "CITYNERVE CAPITAL WORKS ORDER REPORT",
-                "━" * 56,
-                f"Generated:      {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
-                "Prepared by:    CityNerve SubSurface Intelligence · NIM / Nemotron-3",
-                f"Annual Budget:  ${budget:,}",
-                f"Pipes Selected: {n_sel}",
-                "",
-                "━━━ PRIORITY QUEUE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                f"{'#':<4} {'Pipe ID':<10} {'Risk':>6}  {'Ward':<15} {'Material':<16} "
-                f"{'Replace $':>10} {'Savings $':>10}",
-                "─" * 75,
-            ]
-            for i, (_, r) in enumerate(sel_data.iterrows(), 1):
-                report_lines.append(
-                    f"{i:<4} {r['pipe_id']:<10} {r['risk_score']:>5.1f}%  "
-                    f"{r['ward']:<15} {r['material']:<16} "
-                    f"${r['replacement_cost']:>9,} ${r['expected_savings']:>9,}"
-                )
+        if st.session_state.get("report_generating"):
+            report_progress = st.empty()
+            with report_progress.container():
+                with st.status(
+                    "Generating capital works order report…",
+                    expanded=True,
+                ) as report_status:
+                    n_w1 = min(n_sel, MAX_NEMOTRON_PIPES)
+                    report_status.write(
+                        f"Loading Nemotron W1 intelligence for up to {n_w1} pipe(s) "
+                        "(cached summaries are reused)…"
+                    )
+                    vm = build_order_report_view_model(
+                        sel_data,
+                        budget=budget,
+                        use_real=use_real,
+                        session_state=st.session_state,
+                    )
+                    report_status.write("Assembling capital program tables and financial summary…")
+                    st.session_state.generated_report_vm = vm
+                    st.session_state.generated_report = vm["plain_text"]
+                    report_status.update(
+                        label="Capital works order report ready",
+                        state="complete",
+                        expanded=False,
+                    )
+            st.session_state.report_generating = False
 
-            report_lines += [
-                "",
-                "━━━ FAILURE DRIVERS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            ]
-            for _, r in sel_data.iterrows():
-                report_lines.append(f"  {r['pipe_id']}: {failure_summary(r)}")
-
-            report_lines += [
-                "",
-                "━━━ FINANCIAL SUMMARY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                f"  Total Replacement Cost:    ${sel_cost:>12,}",
-                f"  Total Est. Emergency Cost: ${sel_savings + sel_cost:>12,}",
-                f"  Net Expected Savings:      ${sel_savings:>12,}",
-                f"  Properties Protected:      {sel_props:>12,}",
-                f"  Portfolio ROI:             {roi_pct:>11.0f}%",
-                "",
-                "━━━ RECOMMENDED SCHEDULE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            ]
-            ward_groups = sel_data.groupby("ward")["pipe_id"].apply(list)
-            for q_idx, (ward, pipes) in enumerate(ward_groups.items(), 1):
-                pipe_list = ", ".join(pipes[:4])
-                if len(pipes) > 4:
-                    pipe_list += f" (+{len(pipes)-4} more)"
-                report_lines.append(f"  Q{min(q_idx,4)}: {pipe_list} — {ward}")
-
-            report_lines += [
-                "",
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                "  Generated by: NIM / Nemotron-3 · CityNerve SubSurface v1.0",
-            ]
-            st.session_state.generated_report = "\n".join(report_lines)
-
-        if st.session_state.generated_report:
+        if st.session_state.get("generated_report_vm"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            section_title("Generated Order Report")
+            render_order_report_panel(st.session_state.generated_report_vm)
+            st.download_button(
+                "⬇ Download plain-text report",
+                st.session_state.generated_report_vm["plain_text"].encode(),
+                "citynerve_order_report.txt",
+                "text/plain",
+                key="dl_order_report",
+            )
+        elif st.session_state.generated_report:
             st.markdown("<br>", unsafe_allow_html=True)
             section_title("Generated Order Report")
             st.markdown(
@@ -860,62 +808,16 @@ with tab3:
         section_title("Generated Maintenance Work Order")
 
         if generate_wo:
-            with st.spinner("Generating work order via NIM / Nemotron..."):
-                time.sleep(1.0)
-
-            wo_rank = int(ranked[ranked["pipe_id"] == wo_pipe_id].index[0])
-            wo_text = f"""\
-CITYNERVE MAINTENANCE WORK ORDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WO Number:     CN-{wo_pipe['pipe_id']}-{wo_pipe['install_year']}
-Generated:     {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
-Priority:      {wo_level.upper()} — Rank #{wo_rank} of {len(ranked)}
-Status:        APPROVED FOR CAPITAL WORKS SCHEDULE
-
-━━━ SEGMENT DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Pipe ID:       {wo_pipe['pipe_id']}
-Location:      {wo_pipe['ward']}, Toronto ON
-Material:      {wo_pipe['material']} (installed {wo_pipe['install_year']})
-Dimensions:    {wo_pipe['diameter_mm']}mm Ø × {wo_pipe['length_m']}m length
-Risk Score:    {wo_pipe['risk_score']:.1f} / 100
-
-━━━ RISK DRIVERS (NIM/Nemotron SHAP Analysis) ━━━━━━
-{failure_summary(wo_pipe)}
-
-• Material age: {wo_pipe['material']} pipe installed {wo_pipe['age']} years ago
-  exceeds typical service life for this material class.
-• Tree intrusion: {wo_pipe['tree_count_5m']} trees within 5m radius —
-  root expansion accelerates corrosion in clay soils.
-• 311 complaints: {wo_pipe['complaints_12mo']} water/pressure complaints
-  in trailing 12 months (network distress indicator).
-• Years since resurfacing: {wo_pipe['years_since_resurfacing']} yrs —
-  elevated thermal stress on pipe wall.
-
-━━━ FINANCIAL ANALYSIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Replacement Cost:      ${wo_pipe['replacement_cost']:>12,}
-Emergency Cost (proj): ${wo_pipe['emergency_cost']:>12,}
-Expected Net Savings:  ${wo_pipe['expected_savings']:>12,}
-Properties Protected:  {wo_pipe['properties_affected']:>12,}
-
-━━━ RECOMMENDED SCOPE OF WORK ━━━━━━━━━━━━━━━━━━━━━━
-1. Traffic control setup — {wo_pipe['ward']} district permit required
-2. Excavation: trench {wo_pipe['diameter_mm']+400}mm wide × {int(wo_pipe['length_m'])+4}m
-3. Pipe removal: {wo_pipe['material']} pipe (asbestos precautions if AC)
-4. Installation: Ductile Iron {wo_pipe['diameter_mm']}mm, restrained joint
-5. Backfill & compaction to City of Toronto road sub-base spec
-6. Road surface restoration — coordinate with Ward resurfacing schedule
-7. Pressure test & bacteriological clearance before service restore
-
-━━━ SCHEDULING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Recommended Window:    Before Nov 1 (pre-freeze season)
-Estimated Duration:    {max(2, wo_pipe['length_m'] // 50)} working days
-Crew Requirement:      4 person crew + equipment
-Permit Lead Time:      10–14 business days
-
-Generated by: NIM / Nemotron-3 · CityNerve SubSurface Intelligence
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-
-            st.session_state.generated_wo = wo_text
+            _ranked = ranked.reset_index(drop=True)
+            wo_rank = int(_ranked.index[_ranked["pipe_id"] == wo_pipe_id][0]) + 1
+            with st.spinner("Fetching Nemotron W1 risk summary for work order…"):
+                st.session_state.generated_wo = build_work_order_text(
+                    wo_pipe,
+                    wo_rank=wo_rank,
+                    queue_len=len(ranked),
+                    use_real=use_real,
+                    session_state=st.session_state,
+                )
 
         if st.session_state.generated_wo:
             st.markdown(

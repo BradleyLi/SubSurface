@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum
 
@@ -26,6 +27,17 @@ class ChatDefaults:
     temperature: float
 
 
+def _legacy_w1_base_url() -> str | None:
+    """Support root .env OPENAI_API_BASE during migration."""
+    value = os.getenv("OPENAI_API_BASE", "").strip()
+    return value or None
+
+
+def _legacy_w1_model() -> str | None:
+    value = os.getenv("OPENAI_MODEL", "").strip()
+    return value or None
+
+
 def get_chat_defaults(profile: WorkflowProfile) -> ChatDefaults:
     settings = get_settings()
     if profile is WorkflowProfile.WORKFLOW1:
@@ -44,9 +56,11 @@ def get_chat_defaults(profile: WorkflowProfile) -> ChatDefaults:
 def get_endpoint(profile: WorkflowProfile) -> EndpointConfig:
     settings = get_settings()
     if profile is WorkflowProfile.WORKFLOW1:
+        base = _legacy_w1_base_url() or settings.workflow1_openai_base_url
+        model = _legacy_w1_model() or settings.workflow1_model
         return EndpointConfig(
-            base_url=settings.workflow1_openai_base_url.rstrip("/"),
-            model=settings.workflow1_model,
+            base_url=base.rstrip("/"),
+            model=model,
             api_key=settings.openai_api_key,
         )
     if profile is WorkflowProfile.WORKFLOW2:

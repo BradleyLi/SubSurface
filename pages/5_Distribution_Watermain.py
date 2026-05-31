@@ -22,19 +22,13 @@ st.set_page_config(
 from app_styles import inject_css, section_title
 from api_client import get_watermains_layer_api
 from data_utils import RISK_COLORS
+from frontend.nav import render_top_nav
 
 inject_css()
 
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"]    { display: none !important; }
-    [data-testid="stSidebarNav"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+if "use_real_dist_data" not in st.session_state:
+    st.session_state.use_real_dist_data = True
+render_top_nav("watermains", use_real_key="use_real_dist_data")
 
 # ── Material colour palette ────────────────────────────────────────────────────
 MAT_COLORS: dict[str, str] = {
@@ -49,31 +43,6 @@ TYPE_COLORS: dict[str, str] = {
     "Transmission": "#1de9b6",
     "Distribution": "#4fc3f7",
 }
-
-# ── Top Nav ───────────────────────────────────────────────────────────────────
-logo_col, gap_col, nav1, nav2, nav3, nav4, toggle_col = st.columns([2.8, 0.3, 1, 1, 1, 1.4, 2.5])
-with logo_col:
-    st.markdown(
-        '<div class="cn-topnav"><div class="cn-nav-logo">CITY<span>NERVE</span>'
-        '<span class="cn-nav-sub"> SubSurface Intelligence</span></div></div>',
-        unsafe_allow_html=True,
-    )
-with nav1:
-    st.page_link("app.py", label="🏠 Overview")
-with nav2:
-    st.page_link("pages/2_Cascade_Simulator.py", label="💥 Cascade Sim")
-with nav3:
-    st.page_link("pages/4_AI_Assistant.py", label="🤖 AI Assistant")
-with nav4:
-    st.page_link("pages/5_Distribution_Watermain.py", label="🚰 Watermains")
-with toggle_col:
-    # Keep this page independent from other pages' data toggle state.
-    st.toggle(
-        "🌐 Toronto Open Data",
-        value=st.session_state.get("use_real_dist_data", True),
-        key="use_real_dist_data",
-    )
-st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown(section_title("🚰 Toronto Watermain Explorer"), unsafe_allow_html=True)

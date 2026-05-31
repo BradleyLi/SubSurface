@@ -33,7 +33,7 @@ async def check_profile(profile: WorkflowProfile) -> ProfileHealth:
             )
             response.raise_for_status()
             payload = response.json()
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, OSError) as exc:
         return ProfileHealth(
             profile=profile,
             base_url=cfg.base_url,

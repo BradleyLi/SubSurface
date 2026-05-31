@@ -20,8 +20,8 @@ class HarnessSettings(BaseSettings):
     workflow1_openai_base_url: str = "http://127.0.0.1:11436/v1"
     workflow1_model: str = "nemotron-nano:12b-v2"
     workflow1_context_window: int = 128_000  # Nemotron-Nano 12B v2 (+ VL variant): 128K tokens
-    workflow1_max_tokens: int = 256
-    workflow1_temperature: float = 0.0
+    workflow1_max_tokens: int = 5000
+    workflow1_temperature: float = 0.3
 
     workflow2_openai_base_url: str = "http://127.0.0.1:11434/v1"
     workflow2_model: str = "nemotron-3-super:latest"
