@@ -236,7 +236,6 @@ def enrich_real_pipes_with_predictions(
     if "ml_material" in merged.columns:
         merged["material"] = merged["ml_material"]
 
-<<<<<<< HEAD
     if "ml_installation_year" in merged.columns:
         inst = pd.to_numeric(merged["ml_installation_year"], errors="coerce")
         merged["install_year"] = inst.fillna(merged["install_year"]).astype(int)
@@ -245,8 +244,6 @@ def enrich_real_pipes_with_predictions(
         ml_age = pd.to_numeric(merged["ml_age_years"], errors="coerce").round()
         merged["age"] = ml_age.fillna(merged["age"]).abs().astype(int)
 
-=======
->>>>>>> da3b215 (static-map)
     merged["risk_score"] = (merged["predicted_break_probability"] * 100.0).round(1)
     merged["risk_level"] = pd.cut(
         merged["risk_percentile"],
