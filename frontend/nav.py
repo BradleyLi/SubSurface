@@ -11,7 +11,6 @@ NAV_PAGES: list[dict[str, str]] = [
     {"id": "overview", "label": "Overview", "path": "app.py"},
     {"id": "risk_map", "label": "Risk Map", "path": "pages/1_Risk_Map.py"},
     {"id": "ai", "label": "AI Assistant", "path": "pages/4_AI_Assistant.py"},
-    {"id": "watermains", "label": "Watermains", "path": "pages/5_Distribution_Watermain.py"},
 ]
 
 HIDE_SIDEBAR_CSS = """
