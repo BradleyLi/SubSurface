@@ -612,6 +612,3 @@ with detail_col:
                 plan = w2_result.get("action_plan", {})
                 with st.expander("Action plan (JSON)"):
                     st.json(plan)
-
-        if st.button("💥 Simulate Cascade Failure →"):
-            st.switch_page("pages/3_Cascade_Simulator.py")
