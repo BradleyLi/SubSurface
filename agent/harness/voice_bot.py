@@ -1007,6 +1007,7 @@ _CLIENT_HTML = r"""
     let startAfterSend = false;
     let recordingStartedAt = 0;
     let currentAudio = null;
+    let speaking = false;
     let holdAudio = null;
     const holdAudioAvailable = {};
     let callEnded = false;
@@ -1098,11 +1099,19 @@ _CLIENT_HTML = r"""
       return levels.peakRms < MIN_AUDIO_PEAK_RMS && levels.avgRms < MIN_AUDIO_AVG_RMS;
     }
     function stopPlayback() {
+      speaking = false;
       if (!currentAudio) return;
       currentAudio.pause();
       currentAudio.currentTime = 0;
       currentAudio = null;
       avatarEl.classList.remove("speaking");
+    }
+    async function consumeQueuedStart() {
+      if (callEnded || !startAfterSend) return false;
+      startAfterSend = false;
+      setTalkLabel("Start");
+      await startRecording();
+      return true;
     }
     function stopHoldPlayback() {
       if (holdAudio) {
@@ -1176,17 +1185,38 @@ _CLIENT_HTML = r"""
       avatarEl.classList.add("speaking");
       try {
         await currentAudio.play();
+        speaking = true;
         currentAudio.onended = () => {
+          speaking = false;
+          currentAudio = null;
           avatarEl.classList.remove("speaking");
-          if (!callEnded) setCallState("connected", "Connected");
+          if (!callEnded) {
+            if (!startAfterSend) setCallState("connected", "Connected");
+            consumeQueuedStart();
+          }
         };
         return true;
       } catch (err) {
         console.warn("Autoplay blocked:", err);
+        speaking = false;
         setCallState("connected", "Tap Hold to hear reply");
         const replay = () => {
           unlockAudio();
-          currentAudio.play().then(() => setCallState("speaking", "Agent speaking")).catch((e) => {
+          currentAudio.onended = () => {
+            speaking = false;
+            currentAudio = null;
+            avatarEl.classList.remove("speaking");
+            if (!callEnded) {
+              if (!startAfterSend) setCallState("connected", "Connected");
+              consumeQueuedStart();
+            }
+          };
+          currentAudio.play().then(() => {
+            speaking = true;
+            setCallState("speaking", "Agent speaking");
+            avatarEl.classList.add("speaking");
+          }).catch((e) => {
+            speaking = false;
             setCallState("connected", "Could not play audio");
           });
           talk.removeEventListener("pointerdown", replay);
@@ -1279,19 +1309,37 @@ _CLIENT_HTML = r"""
       } finally {
         sending = false;
         talk.disabled = callEnded;
-        if (!callEnded && (retryAfterNoSpeech || startAfterSend)) {
-          startAfterSend = false;
-          setTalkLabel("Start");
-          await startRecording();
-        } else if (!callEnded) {
-          setTalkLabel("Start");
+        if (!callEnded) {
+          if (retryAfterNoSpeech) {
+            startAfterSend = false;
+            setTalkLabel("Start");
+            await startRecording();
+          } else if (speaking) {
+            // Let the agent finish its turn; a queued start fires on playback end.
+            setTalkLabel(startAfterSend ? "Queued" : "Start");
+          } else if (startAfterSend) {
+            await consumeQueuedStart();
+          } else {
+            setTalkLabel("Start");
+          }
         }
       }
     }
     function toggleQueuedStart(ev) {
       if (ev) ev.preventDefault();
       startAfterSend = !startAfterSend;
-      setTalkLabel(startAfterSend ? "Queued" : "Wait");
+      setTalkLabel(startAfterSend ? "Queued" : "Start");
+      if (speaking) {
+        // Keep the "Agent speaking" status; just note the queued turn.
+        setCaption(
+          "",
+          startAfterSend
+            ? "I'll start listening as soon as the agent finishes."
+            : "",
+          "agent"
+        );
+        return;
+      }
       setCallState("busy", startAfterSend ? "Will listen next" : "One moment...");
       if (startAfterSend) {
         setCaption("", "I'll start listening as soon as this response is ready.", "");
@@ -1367,7 +1415,7 @@ _CLIENT_HTML = r"""
     function toggleRecording(ev) {
       if (holding) {
         stopRecording(ev);
-      } else if (sending) {
+      } else if (sending || speaking) {
         toggleQueuedStart(ev);
       } else {
         startRecording(ev);

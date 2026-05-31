@@ -25,6 +25,9 @@ voice_sessions/debug_audio/
 voice_sessions/tts_audio/
 voice_models/
 
+# Local HuggingFace cache (Kokoro TTS weights)
+.hf_cache/
+
 # OS
 .DS_Store
 Thumbs.db
