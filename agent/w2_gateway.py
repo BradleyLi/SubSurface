@@ -5,7 +5,6 @@ Workflow 2 gateway: multi-role analysis via Nemotron Super (harness W2).
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from datetime import datetime, timezone
 
@@ -19,13 +18,15 @@ from agent.schemas import (
     ActionPlan,
     AnalysisPacket,
     AnalysisRunResponse,
+    CallerReport,
+    PerRoleCallerContext,
     RoleName,
     RoleReport,
 )
+from agent.voice_context import caller_report_from_payload
+from agent.voice_pipe_match import find_pipe_for_latest_transcript
+from agent.w2_orchestrator import call_transcript_orchestrator
 from agent.w2_prompts import (
-    W2_ROLE_MAX_TOKENS,
-    W2_SYNTHESIS_MAX_TOKENS,
-    W2_TEMPERATURE,
     build_role_messages,
     build_synthesis_messages,
     role_filename,
@@ -42,19 +43,60 @@ _ALL_ROLES = [
     RoleName.OPERATIONS,
 ]
 
+_ROLE_CONTEXT_ATTR = {
+    RoleName.ENGINEER: "engineer",
+    RoleName.POLICE: "police",
+    RoleName.FIELD: "field",
+    RoleName.OPERATIONS: "operations",
+}
+
 
 def _w2_parallel() -> bool:
     return os.getenv("W2_PARALLEL", "true").lower() in ("1", "true", "yes")
 
 
-async def _call_role(packet: AnalysisPacket, role: RoleName) -> RoleReport:
-    messages = build_role_messages(packet, role)
+def _resolve_caller_report(
+    pipe_id: str,
+    df: pd.DataFrame,
+    *,
+    caller_report: CallerReport | None,
+    use_latest_voice_transcript: bool,
+    transcript_path: str | None,
+) -> CallerReport | None:
+    """Attach caller report only when transcript matches the requested pipe."""
+    if caller_report is not None:
+        return caller_report
+
+    if not use_latest_voice_transcript:
+        return None
+
+    payload, match = find_pipe_for_latest_transcript(
+        df, transcript_path=transcript_path
+    )
+    if payload is None or match is None or match.pipe_id != pipe_id:
+        return None
+
+    return CallerReport.model_validate(
+        caller_report_from_payload(
+            payload,
+            match_confidence=match.confidence,
+            match_method=match.method,
+        )
+    )
+
+
+async def _call_role(
+    packet: AnalysisPacket,
+    role: RoleName,
+    per_role_ctx: PerRoleCallerContext,
+) -> RoleReport:
+    attr = _ROLE_CONTEXT_ATTR[role]
+    role_context = getattr(per_role_ctx, attr, "")
+    messages = build_role_messages(packet, role, role_context=role_context)
     try:
         markdown = await harness_chat(
             WorkflowProfile.WORKFLOW2,
             messages,
-            max_tokens=W2_ROLE_MAX_TOKENS,
-            temperature=W2_TEMPERATURE,
             json_mode=False,
         )
         if not markdown.strip():
@@ -74,15 +116,18 @@ async def _call_synthesis(
     role_reports: list[RoleReport],
     *,
     model_name: str,
+    per_role_ctx: PerRoleCallerContext,
 ) -> tuple[str, ActionPlan, str]:
     """Returns (final_markdown, action_plan, source)."""
-    messages = build_synthesis_messages(packet, role_reports)
+    messages = build_synthesis_messages(
+        packet,
+        role_reports,
+        synthesis_context=per_role_ctx.synthesis,
+    )
     try:
         raw = await harness_chat(
             WorkflowProfile.WORKFLOW2,
             messages,
-            max_tokens=W2_SYNTHESIS_MAX_TOKENS,
-            temperature=W2_TEMPERATURE,
             json_mode=False,
         )
         try:
@@ -109,25 +154,50 @@ async def workflow2_run(
     *,
     use_real: bool = False,
     df: pd.DataFrame | None = None,
+    caller_report: CallerReport | None = None,
+    use_latest_voice_transcript: bool = True,
+    transcript_path: str | None = None,
 ) -> AnalysisRunResponse:
     if df is None:
         df = get_pipes(use_real=use_real)
 
-    packet = build_analysis_packet(pipe_id, df)
+    resolved_caller = _resolve_caller_report(
+        pipe_id,
+        df,
+        caller_report=caller_report,
+        use_latest_voice_transcript=use_latest_voice_transcript,
+        transcript_path=transcript_path,
+    )
+
+    packet = build_analysis_packet(
+        pipe_id, df, caller_report=resolved_caller
+    )
     endpoint = get_endpoint(WorkflowProfile.WORKFLOW2)
     model_name = endpoint.model
 
+    per_role_ctx = PerRoleCallerContext()
+    if resolved_caller is not None:
+        per_role_ctx = await call_transcript_orchestrator(resolved_caller)
+
     if _w2_parallel():
         role_reports = list(
-            await asyncio.gather(*[_call_role(packet, role) for role in _ALL_ROLES])
+            await asyncio.gather(
+                *[
+                    _call_role(packet, role, per_role_ctx)
+                    for role in _ALL_ROLES
+                ]
+            )
         )
     else:
         role_reports = []
         for role in _ALL_ROLES:
-            role_reports.append(await _call_role(packet, role))
+            role_reports.append(await _call_role(packet, role, per_role_ctx))
 
     final_md, action_plan, synth_source = await _call_synthesis(
-        packet, role_reports, model_name=model_name
+        packet,
+        role_reports,
+        model_name=model_name,
+        per_role_ctx=per_role_ctx,
     )
 
     role_sources = {r.source for r in role_reports}
@@ -163,5 +233,17 @@ def workflow2_run_sync(
     *,
     use_real: bool = False,
     df: pd.DataFrame | None = None,
+    caller_report: CallerReport | None = None,
+    use_latest_voice_transcript: bool = True,
+    transcript_path: str | None = None,
 ) -> AnalysisRunResponse:
-    return asyncio.run(workflow2_run(pipe_id, use_real=use_real, df=df))
+    return asyncio.run(
+        workflow2_run(
+            pipe_id,
+            use_real=use_real,
+            df=df,
+            caller_report=caller_report,
+            use_latest_voice_transcript=use_latest_voice_transcript,
+            transcript_path=transcript_path,
+        )
+    )

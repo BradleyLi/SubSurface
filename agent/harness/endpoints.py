@@ -43,12 +43,12 @@ def get_chat_defaults(profile: WorkflowProfile) -> ChatDefaults:
     if profile is WorkflowProfile.WORKFLOW1:
         return ChatDefaults(
             max_tokens=settings.workflow1_max_tokens,
-            temperature=settings.workflow1_temperature,
+            temperature=settings.llm_temperature,
         )
     if profile is WorkflowProfile.WORKFLOW2:
         return ChatDefaults(
             max_tokens=settings.workflow2_max_tokens,
-            temperature=settings.workflow2_temperature,
+            temperature=settings.llm_temperature,
         )
     raise ValueError(f"Unknown workflow profile: {profile!r}")
 

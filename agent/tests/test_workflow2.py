@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from agent.analysis_packet import build_analysis_packet
-from agent.schemas import RoleName
+from agent.schemas import CallerReport, PerRoleCallerContext, RoleName
 from agent.w2_gateway import workflow2_run
+from agent.w2_prompts import augment_system_prompt, build_role_messages
 from agent.w2_template import template_role_report, template_synthesis
 from data_utils import get_pipes
 
@@ -63,7 +64,11 @@ async def test_workflow2_run_mocked():
         return _ROLE_MD
 
     with patch("agent.w2_gateway.harness_chat", side_effect=mock_chat):
-        result = await workflow2_run(pipe_id, df=df)
+        result = await workflow2_run(
+            pipe_id,
+            df=df,
+            use_latest_voice_transcript=False,
+        )
 
     assert result.status == "completed"
     assert result.source == "nemotron"
@@ -91,7 +96,90 @@ async def test_workflow2_all_template_on_failure():
         "agent.w2_gateway.harness_chat",
         AsyncMock(side_effect=RuntimeError("down")),
     ):
-        result = await workflow2_run(pipe_id, df=df)
+        result = await workflow2_run(
+            pipe_id,
+            df=df,
+            use_latest_voice_transcript=False,
+        )
 
     assert result.source == "template"
     assert all(r.source == "template" for r in result.roles)
+
+
+def test_augment_system_prompt_injects_caller_slice():
+    base = "Base role instructions."
+    out = augment_system_prompt(base, "Flooding reported at intersection.")
+    assert "Caller report" in out
+    assert "Flooding reported" in out
+    assert augment_system_prompt(base, "") == base
+
+
+@pytest.mark.asyncio
+async def test_workflow2_role_system_includes_orchestrator_context():
+    df = get_pipes(use_real=False)
+    pipe_id = str(df.iloc[0]["pipe_id"])
+    packet = build_analysis_packet(
+        pipe_id,
+        df,
+        caller_report=CallerReport(
+            session_id="s-test",
+            transcript=[{"role": "user", "content": "flooding"}],
+        ),
+    )
+    per_role = PerRoleCallerContext(
+        engineer="Hydraulic concern from caller.",
+        police="",
+        field="",
+        operations="",
+        synthesis="",
+    )
+    messages = build_role_messages(
+        packet, RoleName.ENGINEER, role_context=per_role.engineer
+    )
+    assert "Hydraulic concern from caller" in messages[0]["content"]
+    assert "I see a lot of flooding" not in messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_workflow2_with_caller_report_calls_orchestrator():
+    df = get_pipes(use_real=False)
+    pipe_id = str(df.iloc[0]["pipe_id"])
+    packet = build_analysis_packet(pipe_id, df)
+    synth = _SYNTH_RAW.replace("PLACEHOLDER", packet.run_id)
+
+    caller = CallerReport(
+        session_id="s1",
+        transcript=[{"role": "user", "content": "flooding"}],
+    )
+    per_role = PerRoleCallerContext(
+        engineer="Engineer slice only.",
+        police="",
+        field="",
+        operations="",
+        synthesis="Synthesis slice.",
+    )
+
+    async def mock_chat(profile, messages, **kwargs):
+        _ = profile, kwargs
+        if messages[0]["role"] == "system" and "Triage" in messages[0]["content"]:
+            return json.dumps(per_role.model_dump())
+        content = messages[-1]["content"]
+        if "Synthesize" in content:
+            return synth
+        return _ROLE_MD
+
+    with (
+        patch("agent.w2_gateway.harness_chat", side_effect=mock_chat),
+        patch(
+            "agent.w2_gateway.call_transcript_orchestrator",
+            AsyncMock(return_value=per_role),
+        ),
+    ):
+        result = await workflow2_run(
+            pipe_id,
+            df=df,
+            caller_report=caller,
+            use_latest_voice_transcript=False,
+        )
+
+    assert result.status == "completed"

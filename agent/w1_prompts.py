@@ -7,8 +7,6 @@ from pathlib import Path
 from agent.schemas import PipeRiskEvidence
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-W1_JSON_MAX_TOKENS = 450
-W1_JSON_TEMPERATURE = 0.0
 
 
 def load_system_prompt(name: str = "workflow1_system.txt") -> str:

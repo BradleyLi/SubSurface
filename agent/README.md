@@ -44,20 +44,42 @@ Modules: `schemas.py`, `evidence.py`, `llm_client.py`, `gateway.py`, `template_s
 
 ## Workflow 2
 
-`POST /api/analysis-runs` with `{"pipe_id": "...", "use_real": false}`
+`POST /api/analysis-runs` with:
+
+```json
+{
+  "pipe_id": "WM-0001",
+  "use_real": false,
+  "use_latest_voice_transcript": true,
+  "transcript_path": null
+}
+```
 
 1. Build `AnalysisPacket` from pipe row
-2. Four parallel Super calls (Engineer, Police, Field, Operations) — prompts in `prompts/w2/`
-3. Synthesis → `final_summary.md` + `action_plan.json`
-4. Artifacts under `data/analysis_runs/{run_id}/`
+2. If a ended voice call transcript matches this `pipe_id` (see below), run the **transcript triage orchestrator** (`prompts/w2/transcript_orchestrator_system.txt`) — one short Super call that returns per-role caller context JSON
+3. Four parallel Super calls (Engineer, Police, Field, Operations) — each role system prompt receives only its orchestrator slice under `## Caller report — unverified field intelligence`
+4. Synthesis → `final_summary.md` + `action_plan.json` (synthesis gets its own orchestrator slice)
+5. Artifacts under `data/analysis_runs/{run_id}/`
 
-Risk Map: **Run multi-role analysis (Super)** (manual; does not auto-run).
+### Voice transcript → W2 handoff
+
+After **End call** on the Reporting Line (`voice_sessions/voice_transcript_*.json`), W2 does **not** auto-run. When you request a report:
+
+- [`voice_pipe_match.py`](voice_pipe_match.py) semantically matches the spoken intersection/streets (and geo when available) to a pipe `street` in the dataset
+- Match is attached only when `matched_pipe_id == pipe_id` for the analysis run (avoids wrong-call bleed)
+- Street matching works best with **real** Toronto data (`use_real=true`); synthetic pipes have empty `street` — geo-only or no match
+
+Risk Map: **Run multi-role analysis (Super)** — shows caller match banner when a transcript is available.
+
+Overview **Generate Order Report** runs W2 once for the caller-matched pipe when that pipe is in the selected queue.
 
 Set `W2_PARALLEL=false` for sequential roles if GPU memory is tight.
 
 ## Config
 
 Copy [`.env.example`](../.env.example) to repo root `.env` (WORKFLOW1/2, `W2_PARALLEL`).
+
+LLM sampling (`WORKFLOW1_MAX_TOKENS`, `WORKFLOW2_MAX_TOKENS`, `LLM_TEMPERATURE`) is defined in [`harness/settings.py`](harness/settings.py) only — not in prompt modules.
 
 Optional [`.env.example`](.env.example) in this folder adds NemoClaw sandbox names and port defaults.
 

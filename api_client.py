@@ -102,12 +102,25 @@ def get_workflow2_health_api() -> dict:
         return {"ok": False, "detail": "backend unavailable"}
 
 
-def post_analysis_run_api(pipe_id: str, use_real: bool = False) -> dict:
+def post_analysis_run_api(
+    pipe_id: str,
+    use_real: bool = False,
+    *,
+    use_latest_voice_transcript: bool = True,
+    transcript_path: str | None = None,
+) -> dict:
     """Workflow 2 multi-role analysis (may take several minutes)."""
+    payload = {
+        "pipe_id": pipe_id,
+        "use_real": use_real,
+        "use_latest_voice_transcript": use_latest_voice_transcript,
+    }
+    if transcript_path is not None:
+        payload["transcript_path"] = transcript_path
     try:
         return _request_json(
             "/api/analysis-runs",
-            payload={"pipe_id": pipe_id, "use_real": use_real},
+            payload=payload,
             timeout=900,
         )
     except Exception:
@@ -115,7 +128,12 @@ def post_analysis_run_api(pipe_id: str, use_real: bool = False) -> dict:
             f"Backend unavailable at {API_BASE_URL}. Running Workflow 2 in-process.",
             key="analysis_run",
         )
-        result = _local_workflow2_run(pipe_id, use_real=use_real)
+        result = _local_workflow2_run(
+            pipe_id,
+            use_real=use_real,
+            use_latest_voice_transcript=use_latest_voice_transcript,
+            transcript_path=transcript_path,
+        )
         return result.model_dump()
 
 

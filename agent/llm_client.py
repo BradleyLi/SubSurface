@@ -9,8 +9,7 @@ import asyncio
 from agent.harness.client import chat as harness_chat
 from agent.harness.endpoints import WorkflowProfile, get_endpoint
 from agent.harness.health import check_profile
-from agent.w1_prompts import W1_JSON_MAX_TOKENS, W1_JSON_TEMPERATURE, load_system_prompt
-from agent.w2_prompts import W2_ROLE_MAX_TOKENS, W2_SYNTHESIS_MAX_TOKENS, W2_TEMPERATURE
+from agent.w1_prompts import load_system_prompt
 
 __all__ = [
     "chat_completion",
@@ -35,8 +34,8 @@ def workflow2_endpoint():
 async def chat_completion_w2_messages(
     messages: list[dict[str, str]],
     *,
-    max_tokens: int = W2_ROLE_MAX_TOKENS,
-    temperature: float = W2_TEMPERATURE,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> str:
     return await harness_chat(
         WorkflowProfile.WORKFLOW2,
@@ -48,17 +47,14 @@ async def chat_completion_w2_messages(
 
 
 async def chat_completion_w2_synthesis(messages: list[dict[str, str]]) -> str:
-    return await chat_completion_w2_messages(
-        messages,
-        max_tokens=W2_SYNTHESIS_MAX_TOKENS,
-    )
+    return await chat_completion_w2_messages(messages)
 
 
 def chat_completion_messages(
     messages: list[dict[str, str]],
     *,
-    max_tokens: int = W1_JSON_MAX_TOKENS,
-    temperature: float = W1_JSON_TEMPERATURE,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> str:
     """Run async harness chat from sync code (gateway, tests)."""
     return asyncio.run(
@@ -77,8 +73,8 @@ def chat_completion(
     *,
     system_prompt: str | None = None,
     model: str | None = None,  # noqa: ARG001 — model comes from harness settings
-    max_tokens: int = W1_JSON_MAX_TOKENS,
-    temperature: float = W1_JSON_TEMPERATURE,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
     json_mode: bool = True,
 ) -> str:
     """Backward-compatible single user message helper."""

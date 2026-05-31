@@ -21,6 +21,7 @@ st.set_page_config(
 )
 
 from app_styles import inject_css, section_title, risk_badge
+from agent.voice_pipe_match import find_pipe_for_latest_transcript
 from api_client import get_pipes_api, get_workflow2_health_api, post_analysis_run_api
 from data_utils  import get_shap, RISK_COLORS
 from frontend.nav import render_top_nav, w2_session_key
@@ -423,19 +424,54 @@ with detail_col:
                 f"Workflow 2 unavailable: {w2_health.get('detail', 'check Ollama :11434')}"
             )
 
-        run_key = w2_session_key(selected_id)
+        _voice_payload, voice_match = find_pipe_for_latest_transcript(df)
+        w2_pipe_id = selected_id
+        if voice_match is not None:
+            incident = (_voice_payload or {}).get("incident") or {}
+            loc = incident.get("location") if isinstance(incident, dict) else None
+            addr = (
+                loc.get("address", "reported location")
+                if isinstance(loc, dict)
+                else "reported location"
+            )
+            st.session_state["voice_pipe_match"] = {
+                "pipe_id": voice_match.pipe_id,
+                "confidence": voice_match.confidence,
+                "method": voice_match.method,
+                "address": addr,
+            }
+            st.info(
+                f"Caller report at **{addr}** matched to **{voice_match.pipe_id}** "
+                f"(confidence {voice_match.confidence:.0%}, {voice_match.method}). "
+                "A voice transcript orchestrator will triage caller details into each W2 role."
+            )
+            if voice_match.pipe_id != selected_id:
+                use_matched = st.checkbox(
+                    f"Use matched caller pipe ({voice_match.pipe_id}) instead of "
+                    f"map selection ({selected_id})",
+                    value=True,
+                    key=f"use_voice_pipe_{selected_id}",
+                )
+                if use_matched:
+                    w2_pipe_id = voice_match.pipe_id
+            else:
+                w2_pipe_id = voice_match.pipe_id
+
+        run_key = w2_session_key(w2_pipe_id)
         if st.button(
             "Run multi-role analysis (Super)",
             disabled=not w2_ok,
-            key=f"btn_w2_{selected_id}",
+            key=f"btn_w2_{w2_pipe_id}",
         ):
             with st.spinner(
-                "Running Engineer, Police, Field, Operations, and synthesis on Super… "
-                "(may take several minutes)"
+                "Running transcript orchestrator, Engineer, Police, Field, "
+                "Operations, and synthesis on Super… (may take several minutes)"
             ):
                 try:
                     st.session_state[run_key] = post_analysis_run_api(
-                        selected_id, use_real=use_real
+                        w2_pipe_id,
+                        use_real=use_real,
+                        use_latest_voice_transcript=True,
                     )
                 except Exception as exc:
                     st.session_state.pop(run_key, None)

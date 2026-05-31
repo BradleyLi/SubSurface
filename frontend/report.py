@@ -158,6 +158,14 @@ def build_order_report_view_model(
         skip_w1_prefetch=True,
     )
 
+    voice_meta: dict[str, Any] = {}
+    if session_state is not None:
+        vmatch = session_state.get("voice_pipe_match")
+        if isinstance(vmatch, dict) and vmatch.get("pipe_id"):
+            voice_meta["caller_report_linked"] = vmatch.get("pipe_id")
+            voice_meta["caller_report_address"] = vmatch.get("address")
+            voice_meta["caller_report_confidence"] = vmatch.get("confidence")
+
     return {
         "meta": {
             "generated_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
@@ -165,6 +173,7 @@ def build_order_report_view_model(
             "n_sel": n_sel,
             "roi_pct": roi_pct,
             "sel_props": sel_props,
+            **voice_meta,
         },
         "queue_table": queue_table,
         "w1_sections": w1_sections,

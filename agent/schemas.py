@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -88,6 +88,25 @@ class NetworkContext(BaseModel):
     note: str = "Topological cascade proxy; not a hydraulic EPANET simulation."
 
 
+class CallerReport(BaseModel):
+    session_id: str
+    ended_at: str | None = None
+    location: dict[str, Any] | None = None
+    transcript: list[dict[str, str]] = Field(default_factory=list)
+    match_confidence: float | None = None
+    match_method: str | None = None
+
+
+class PerRoleCallerContext(BaseModel):
+    """Orchestrator output: one focused context string per W2 role."""
+
+    engineer: str = ""
+    police: str = ""
+    field: str = ""
+    operations: str = ""
+    synthesis: str = ""
+
+
 class AnalysisPacket(BaseModel):
     run_id: str
     analysis_scope: AnalysisScope
@@ -95,6 +114,7 @@ class AnalysisPacket(BaseModel):
     assets: list[PipeRiskEvidence] = Field(min_length=1)
     network_context: NetworkContext | None = None
     constraints: AnalysisConstraints = Field(default_factory=AnalysisConstraints)
+    caller_report: CallerReport | None = None
 
 
 class RoleReport(BaseModel):
@@ -136,3 +156,5 @@ class AnalysisRunResponse(BaseModel):
 class AnalysisRunRequest(BaseModel):
     pipe_id: str
     use_real: bool = False
+    use_latest_voice_transcript: bool = True
+    transcript_path: str | None = None

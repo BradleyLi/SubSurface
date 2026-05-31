@@ -13,6 +13,7 @@ from agent.schemas import (
     AnalysisConstraints,
     AnalysisPacket,
     AnalysisScope,
+    CallerReport,
     NetworkContext,
     RiskModelInfo,
 )
@@ -29,6 +30,7 @@ def build_analysis_packet(
     df: pd.DataFrame,
     *,
     run_id: str | None = None,
+    caller_report: CallerReport | None = None,
 ) -> AnalysisPacket:
     matches = df[df["pipe_id"] == pipe_id]
     if matches.empty:
@@ -58,4 +60,5 @@ def build_analysis_packet(
         assets=[evidence],
         network_context=network,
         constraints=AnalysisConstraints(),
+        caller_report=caller_report,
     )

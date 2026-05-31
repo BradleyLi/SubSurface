@@ -20,6 +20,12 @@ def render_order_report_panel(vm: dict[str, Any]) -> None:
                     <div class="cn-card-title" style="margin:0">Capital Works Order Report</div>
                     <div style="font-size:.72rem;color:#5a7a9a;margin-top:.25rem">
                         {meta.get("generated_at", "")} · Nemotron W1 + local analytics
+                        {(
+                            f' · Caller report linked: {meta.get("caller_report_linked")}'
+                            f' ({meta.get("caller_report_address", "")})'
+                            if meta.get("caller_report_linked")
+                            else ""
+                        )}
                     </div>
                 </div>
             </div>

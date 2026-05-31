@@ -145,7 +145,12 @@ def api_pipe_risk_summary(pipe_id: str, use_real: bool = False) -> dict:
 async def api_create_analysis_run(body: AnalysisRunRequest) -> dict:
     """Workflow 2: four-role analysis + synthesis (Nemotron Super)."""
     try:
-        result = await workflow2_run(body.pipe_id, use_real=body.use_real)
+        result = await workflow2_run(
+            body.pipe_id,
+            use_real=body.use_real,
+            use_latest_voice_transcript=body.use_latest_voice_transcript,
+            transcript_path=body.transcript_path,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
