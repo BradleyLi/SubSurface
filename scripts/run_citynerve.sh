@@ -24,7 +24,14 @@ OLLAMA_MODELS="${OLLAMA_MODELS:-${HOME}/.ollama/models}"
 export OLLAMA_MODELS
 STREAMLIT_HOST="${STREAMLIT_HOST:-0.0.0.0}"
 VOICE_CHAT_HOST="${VOICE_CHAT_HOST:-0.0.0.0}"
-VOICE_CHAT_PORT="${VOICE_CHAT_PORT:-8503}"
+
+find_free_port() {
+  local port="$1"
+  while ss -tln 2>/dev/null | grep -q ":${port} "; do
+    port=$((port + 1))
+  done
+  echo "$port"
+}
 
 PID_W1=""
 PID_W2=""
@@ -84,9 +91,9 @@ kill_listeners_on_port() {
 
 stop_stack() {
   echo "Stopping CityNerve services on known ports..."
-  kill_listeners_on_port 8000
-  kill_listeners_on_port 8501
-  kill_listeners_on_port 8503
+  kill_listeners_on_port "${FASTAPI_PORT:-8000}"
+  kill_listeners_on_port "${STREAMLIT_PORT:-8501}"
+  kill_listeners_on_port "${VOICE_CHAT_PORT:-8503}"
   echo "Done."
 }
 
@@ -159,13 +166,22 @@ if [[ -x "${ROOT}/agent/scripts/check_endpoints.sh" ]]; then
   fi
 fi
 
+FASTAPI_PORT=$(find_free_port "${FASTAPI_PORT:-8000}")
+STREAMLIT_PORT=$(find_free_port "${STREAMLIT_PORT:-8501}")
+VOICE_CHAT_PORT=$(find_free_port "${VOICE_CHAT_PORT:-8503}")
+export FASTAPI_PORT STREAMLIT_PORT VOICE_CHAT_PORT
+
+[[ "${FASTAPI_PORT}"   != "8000" ]] && echo "WARN: port 8000 busy — FastAPI on :${FASTAPI_PORT}"   >&2
+[[ "${STREAMLIT_PORT}" != "8501" ]] && echo "WARN: port 8501 busy — Streamlit on :${STREAMLIT_PORT}" >&2
+[[ "${VOICE_CHAT_PORT}" != "8503" ]] && echo "WARN: port 8503 busy — Voice on :${VOICE_CHAT_PORT}"  >&2
+
 echo ""
 echo "==> Starting FastAPI (uvicorn)"
-"$PYTHON" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+"$PYTHON" -m uvicorn backend.main:app --host 127.0.0.1 --port "${FASTAPI_PORT}" &
 PID_UVICORN=$!
 
 echo "==> Starting Streamlit"
-"$PYTHON" -m streamlit run app.py --server.port 8501 --server.address "${STREAMLIT_HOST}" &
+"$PYTHON" -m streamlit run app.py --server.port "${STREAMLIT_PORT}" --server.address "${STREAMLIT_HOST}" &
 PID_STREAMLIT=$!
 
 echo "==> Starting Voice Reporting Line"
@@ -179,9 +195,9 @@ cat <<EOF
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    CityNerve Demo Stack Ready                    ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  Streamlit UI     http://${STREAMLIT_HOST}:8501                          ║
-║  FastAPI docs     http://127.0.0.1:8000/docs                     ║
-║  Voice Reporting  http://${VOICE_CHAT_HOST}:${VOICE_CHAT_PORT}/client/                  ║
+║  Streamlit UI     http://${STREAMLIT_HOST}:${STREAMLIT_PORT}
+║  FastAPI docs     http://127.0.0.1:${FASTAPI_PORT}/docs
+║  Voice Reporting  http://${VOICE_CHAT_HOST}:${VOICE_CHAT_PORT}/client/
 ║  Ollama W2        http://127.0.0.1:11434/v1  (Super)             ║
 ║  Ollama W1        http://127.0.0.1:11436/v1  (Nano 12B)          ║
 ╠══════════════════════════════════════════════════════════════════╣
