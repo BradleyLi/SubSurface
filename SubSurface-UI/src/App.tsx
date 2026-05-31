@@ -30,7 +30,8 @@ export default function App() {
     riskLevels,
   } = usePipes();
 
-  const { voiceMatch } = useVoiceMatch(pipes, true);
+  const { voiceMatch, showActiveReport } = useVoiceMatch(pipes, true);
+  const activeVoiceMatch = showActiveReport ? voiceMatch : null;
   const [selectedPipe, setSelectedPipe] = useState<Pipe | null>(null);
   const [useMatchedVoicePipe, setUseMatchedVoicePipe] = useState(true);
 
@@ -38,8 +39,9 @@ export default function App() {
     setSelectedPipe(pipe);
   };
 
-  // Auto-select matched voice pipe when a new caller report arrives
+  // Auto-select matched voice pipe when a live caller report arrives
   useEffect(() => {
+    if (!showActiveReport) return;
     const match = voiceMatch?.match;
     if (!match || !useMatchedVoicePipe) return;
 
@@ -47,7 +49,13 @@ export default function App() {
     if (matched) {
       setSelectedPipe(matched);
     }
-  }, [voiceMatch?.match?.pipe_id, useMatchedVoicePipe, pipes, voiceMatch?.match]);
+  }, [
+    showActiveReport,
+    voiceMatch?.match?.pipe_id,
+    useMatchedVoicePipe,
+    pipes,
+    voiceMatch?.match,
+  ]);
 
   return (
     <div className="app">
@@ -56,7 +64,7 @@ export default function App() {
         colorMode={filters.colorMode}
         selectedPipe={selectedPipe}
         onSelectPipe={handleSelectPipe}
-        voiceMatch={voiceMatch?.match ?? null}
+        voiceMatch={activeVoiceMatch?.match ?? null}
       />
 
       <aside className="sidebar">
@@ -99,7 +107,7 @@ export default function App() {
               />
 
               <CallerReportAlert
-                voiceMatch={voiceMatch}
+                voiceMatch={activeVoiceMatch}
                 selectedPipeId={selectedPipe?.pipe_id ?? null}
                 useMatchedPipe={useMatchedVoicePipe}
                 onUseMatchedPipeChange={setUseMatchedVoicePipe}
@@ -126,7 +134,7 @@ export default function App() {
               <MultiRoleAnalysis
                 pipe={selectedPipe}
                 useReal
-                voiceMatch={voiceMatch}
+                voiceMatch={activeVoiceMatch}
                 useMatchedVoicePipe={useMatchedVoicePipe}
               />
 

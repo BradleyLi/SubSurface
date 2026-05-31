@@ -7,6 +7,8 @@ const STORAGE_PREFIX = "citynerve:lastVoiceTranscriptEvent:";
 
 export interface UseVoiceMatchResult {
   voiceMatch: VoiceMatchResponse | null;
+  /** True only after a live end-call SSE event in this session (not on boot). */
+  showActiveReport: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -16,7 +18,8 @@ export function useVoiceMatch(
   useReal = true,
 ): UseVoiceMatchResult {
   const [voiceMatch, setVoiceMatch] = useState<VoiceMatchResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [showActiveReport, setShowActiveReport] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -28,10 +31,6 @@ export function useVoiceMatch(
       setLoading(false);
     }
   }, [useReal]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useEffect(() => {
     const storageKey = `${STORAGE_PREFIX}react-ui`;
@@ -62,6 +61,7 @@ export function useVoiceMatch(
         /* ignore dedupe failures */
       }
 
+      setShowActiveReport(true);
       void refresh();
     });
 
@@ -79,5 +79,5 @@ export function useVoiceMatch(
     }
   }, [voiceMatch, pipes]);
 
-  return { voiceMatch, loading, refresh };
+  return { voiceMatch, showActiveReport, loading, refresh };
 }
