@@ -20,6 +20,7 @@ st.set_page_config(
 from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils import get_shap, RISK_COLORS, MATERIAL_RISK
+from map_viz import build_risk_map_deck, map_view_toolbar, render_map
 from model import failure_summary
 from agent import agent_failure_explanation
 
@@ -91,9 +92,64 @@ with toggle_col:
 
 st.markdown('<div class="cn-nav-divider"></div>', unsafe_allow_html=True)
 
+# ── AI Insights Strip ──────────────────────────────────────────────────────
+_top_crit = df[df["risk_level"] == "Critical"].nlargest(1, "risk_score")
+_top_ward = df.groupby("ward")["risk_score"].mean().idxmax()
+_ward_avg = df[df["ward"] == _top_ward]["risk_score"].mean()
+_critical_count_raw = int((df["risk_level"] == "Critical").sum())
+_high_count_raw     = int((df["risk_level"] == "High").sum())
+
+if len(_top_crit):
+    _top_id   = _top_crit.iloc[0]["pipe_id"]
+    _top_pct  = _top_crit.iloc[0]["risk_score"]
+    _top_mat  = _top_crit.iloc[0]["material"]
+    _top_ward_pipe = _top_crit.iloc[0]["ward"]
+    _chip1_value = f"{_top_id} · {_top_pct:.0f}%"
+    _chip1_sub   = f"{_top_ward_pipe} · {_top_mat}"
+else:
+    _chip1_value = "—"
+    _chip1_sub   = "No critical pipes"
+
+_budget_default = 5_000_000
+_critical_pipes = df[df["risk_level"] == "Critical"]
+_budget_needed  = int(_critical_pipes["replacement_cost"].sum())
+_budget_pct     = min(100, int((_budget_default / max(_budget_needed, 1)) * 100))
+
+st.markdown(
+    f"""
+    <div class="ai-strip">
+        <div class="ai-chip critical">
+            <div class="ai-chip-icon">🔴</div>
+            <div class="ai-chip-body">
+                <div class="ai-chip-label">Highest Risk Pipe</div>
+                <div class="ai-chip-value">{_chip1_value}</div>
+                <div class="ai-chip-sub">{_chip1_sub}</div>
+            </div>
+        </div>
+        <div class="ai-chip warn">
+            <div class="ai-chip-icon">📍</div>
+            <div class="ai-chip-body">
+                <div class="ai-chip-label">Hotspot Ward</div>
+                <div class="ai-chip-value">{_top_ward}</div>
+                <div class="ai-chip-sub">Avg risk score {_ward_avg:.1f} — highest in network</div>
+            </div>
+        </div>
+        <div class="ai-chip {'ok' if _budget_pct >= 80 else 'warn' if _budget_pct >= 40 else 'critical'}">
+            <div class="ai-chip-icon">💰</div>
+            <div class="ai-chip-body">
+                <div class="ai-chip-label">Budget vs Critical Need</div>
+                <div class="ai-chip-value">${_budget_default/1e6:.1f}M covers {_budget_pct}%</div>
+                <div class="ai-chip-sub">{_critical_count_raw} critical · {_high_count_raw} high · ${_budget_needed/1e6:.1f}M needed</div>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ── KPI Row ────────────────────────────────────────────────────────────────
-critical_count = int((df["risk_level"] == "Critical").sum())
-high_count     = int((df["risk_level"] == "High").sum())
+critical_count = _critical_count_raw
+high_count     = _high_count_raw
 total_savings  = int(df["expected_savings"].sum())
 avg_risk       = df["risk_score"].mean()
 
@@ -120,62 +176,61 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-map_col, filter_col = st.columns([3, 1], gap="medium")
-
-# ── Filter panel ───────────────────────────────────────────────────────────
-with filter_col:
-    st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
-    section_title("Map Filters")
-
-    risk_filter = st.multiselect(
-        "Risk Level",
-        options=["Critical", "High", "Medium", "Low"],
-        default=["Critical", "High", "Medium", "Low"],
-        key="map_risk_filter",
-    )
-    mat_filter = st.multiselect(
-        "Material",
-        options=sorted(df["material"].unique()),
-        default=sorted(df["material"].unique()),
-        key="map_mat_filter",
-    )
-    ward_filter_map = st.multiselect(
-        "Ward",
-        options=sorted(df["ward"].unique()),
-        default=sorted(df["ward"].unique()),
-        key="map_ward_filter",
-    )
-    min_risk = st.slider("Min Risk Score", 0, 100, 0, key="map_min_risk")
+# ── Compact horizontal filter bar ─────────────────────────────────────────
+with st.expander("⚙  Map Filters", expanded=False):
+    fc1, fc2, fc3, fc4 = st.columns(4, gap="medium")
+    with fc1:
+        risk_filter = st.multiselect(
+            "Risk Level",
+            options=["Critical", "High", "Medium", "Low"],
+            default=["Critical", "High", "Medium", "Low"],
+            key="map_risk_filter",
+        )
+    with fc2:
+        mat_filter = st.multiselect(
+            "Material",
+            options=sorted(df["material"].unique()),
+            default=sorted(df["material"].unique()),
+            key="map_mat_filter",
+        )
+    with fc3:
+        ward_filter_map = st.multiselect(
+            "Ward",
+            options=sorted(df["ward"].unique()),
+            default=sorted(df["ward"].unique()),
+            key="map_ward_filter",
+        )
+    with fc4:
+        min_risk = st.slider("Min Risk Score", 0, 100, 0, key="map_min_risk")
 
     if has_layers:
-        st.divider()
-        type_filter = st.multiselect(
-            "Pipe Type",
-            options=pipe_types_available,
-            default=pipe_types_available,
-            key="map_type_filter",
-        )
-        color_mode = st.radio(
-            "Color by",
-            ["Risk Level", "Pipe Type"],
-            key="map_color_mode",
-            horizontal=True,
-        )
+        ft1, ft2, ft3 = st.columns([1, 1, 3], gap="medium")
+        with ft1:
+            type_filter = st.multiselect(
+                "Pipe Type",
+                options=pipe_types_available,
+                default=pipe_types_available,
+                key="map_type_filter",
+            )
+        with ft2:
+            color_mode = st.radio(
+                "Color by",
+                ["Risk Level", "Pipe Type"],
+                key="map_color_mode",
+                horizontal=True,
+            )
+        with ft3:
+            leg_cols = st.columns(len(RISK_COLORS))
+            for i, (lvl, col) in enumerate(RISK_COLORS.items()):
+                leg_cols[i].markdown(
+                    f'<div style="display:flex;align-items:center;gap:.4rem;padding-top:.5rem">'
+                    f'<div style="width:9px;height:9px;border-radius:50%;background:{col};flex-shrink:0"></div>'
+                    f'<span style="font-size:.74rem;color:#8faabf">{lvl}</span></div>',
+                    unsafe_allow_html=True,
+                )
     else:
         type_filter = pipe_types_available or ["Synthetic"]
         color_mode  = "Risk Level"
-
-    st.divider()
-    section_title("Legend")
-    for lvl, col in RISK_COLORS.items():
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:.5rem;margin:.2rem 0">'
-            f'<div style="width:10px;height:10px;border-radius:50%;background:{col};flex-shrink:0"></div>'
-            f'<span style="font-size:.78rem;color:#8faabf">{lvl}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Apply map filters ──────────────────────────────────────────────────────
 mask = (
@@ -188,133 +243,34 @@ if has_layers and type_filter:
     mask = mask & df["pipe_type"].isin(type_filter)
 fdf = df[mask]
 
-# ── Map ────────────────────────────────────────────────────────────────────
-with map_col:
-    section_title(
-        "Toronto Watermain Network — Predicted Risk"
-        if color_mode == "Risk Level"
-        else "Toronto Watermain Network — Transmission vs Distribution"
-    )
+# ── Full-width Map ─────────────────────────────────────────────────────────
+section_title(
+    "Toronto Watermain Network — Predicted Risk"
+    if color_mode == "Risk Level"
+    else "Toronto Watermain Network — Transmission vs Distribution"
+)
 
-    fig = go.Figure()
-    risk_base_widths = {"Critical": 3.5, "High": 3.0, "Medium": 2.5, "Low": 2.0}
+map_view = map_view_toolbar("app_risk", zoom=11.0)
+deck = build_risk_map_deck(
+    fdf,
+    color_mode=color_mode,
+    has_layers=has_layers,
+    risk_colors=RISK_COLORS,
+    type_colors=TYPE_COLORS,
+    type_widths=TYPE_WIDTHS,
+    selected_ids=st.session_state.get("selected_pipe_ids", []),
+    show_buildings=map_view.show_buildings,
+    view_3d=map_view.view_3d,
+    zoom=map_view.zoom,
+)
+render_map(deck, height=640)
 
-    if color_mode == "Pipe Type" and has_layers:
-        for ptype in ["Distribution", "Transmission"]:
-            sub = fdf[fdf["pipe_type"] == ptype]
-            if sub.empty:
-                continue
-            lats, lons = [], []
-            for _, r in sub.iterrows():
-                lats.extend([r["lat0"], r["lat1"], None])
-                lons.extend([r["lon0"], r["lon1"], None])
-            fig.add_trace(go.Scattermap(
-                lat=lats, lon=lons, mode="lines",
-                line=dict(width=TYPE_WIDTHS[ptype], color=TYPE_COLORS[ptype]),
-                name=ptype, hoverinfo="none", showlegend=True,
-            ))
-    else:
-        for level in ["Critical", "High", "Medium", "Low"]:
-            color      = RISK_COLORS[level]
-            base_width = risk_base_widths[level]
-            if has_layers:
-                for idx, ptype in enumerate(["Distribution", "Transmission"]):
-                    sub = fdf[(fdf["risk_level"] == level) & (fdf["pipe_type"] == ptype)]
-                    if sub.empty:
-                        continue
-                    lats, lons = [], []
-                    for _, r in sub.iterrows():
-                        lats.extend([r["lat0"], r["lat1"], None])
-                        lons.extend([r["lon0"], r["lon1"], None])
-                    fig.add_trace(go.Scattermap(
-                        lat=lats, lon=lons, mode="lines",
-                        line=dict(width=base_width + (0.8 if ptype == "Transmission" else 0), color=color),
-                        name=level, legendgroup=level,
-                        showlegend=(idx == 1), hoverinfo="none",
-                    ))
-            else:
-                sub = fdf[fdf["risk_level"] == level]
-                if sub.empty:
-                    continue
-                lats, lons = [], []
-                for _, r in sub.iterrows():
-                    lats.extend([r["lat0"], r["lat1"], None])
-                    lons.extend([r["lon0"], r["lon1"], None])
-                fig.add_trace(go.Scattermap(
-                    lat=lats, lon=lons, mode="lines",
-                    line=dict(width=base_width, color=color),
-                    name=level, hoverinfo="none", showlegend=True,
-                ))
-
-    if not fdf.empty:
-        fig.add_trace(go.Scattermap(
-            lat=fdf["lat"], lon=fdf["lon"], mode="markers",
-            marker=dict(size=6, color=fdf["risk_color"].tolist(), opacity=0.0),
-            text=fdf["pipe_id"],
-            customdata=fdf[["risk_score", "material", "age", "ward",
-                            "risk_level", "diameter_mm", "emergency_cost",
-                            "pipe_type"]].values,
-            hovertemplate=(
-                "<b>%{text}</b><br>"
-                "Risk Score: <b>%{customdata[0]:.1f}%</b><br>"
-                "Material: %{customdata[1]} · Age: %{customdata[2]} yrs<br>"
-                "Ward: %{customdata[3]}<br>"
-                "Emergency Cost: $%{customdata[6]:,}<extra></extra>"
-            ),
-            name="", showlegend=False,
-        ))
-
-    # Highlight pipes selected in the Priority Queue checkboxes.
-    selected_ids = st.session_state.get("selected_pipe_ids", [])
-    selected_on_map = fdf[fdf["pipe_id"].isin(selected_ids)] if selected_ids else fdf.iloc[0:0]
-    if not selected_on_map.empty:
-        sel_lats, sel_lons = [], []
-        for _, r in selected_on_map.iterrows():
-            sel_lats.extend([r["lat0"], r["lat1"], None])
-            sel_lons.extend([r["lon0"], r["lon1"], None])
-
-        # Outer light stroke creates contrast on dark basemap and colored pipes.
-        fig.add_trace(go.Scattermap(
-            lat=sel_lats, lon=sel_lons,
-            mode="lines",
-            line=dict(width=8, color="rgba(232,244,253,0.75)"),
-            hoverinfo="none",
-            showlegend=False,
-        ))
-        # Inner accent line identifies checked pipes clearly.
-        fig.add_trace(go.Scattermap(
-            lat=sel_lats, lon=sel_lons,
-            mode="lines",
-            line=dict(width=4.6, color="#ff4fd8"),
-            name=f"Checked Pipes ({len(selected_on_map)})",
-            hoverinfo="none",
-            showlegend=True,
-        ))
-
-    fig.update_layout(
-        map=dict(
-            style="carto-darkmatter",
-            center=dict(lat=43.70, lon=-79.38),
-            zoom=10.2,
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=0, b=0),
-        height=530,
-        legend=dict(
-            bgcolor="#0d1b2a", bordercolor="#162033", borderwidth=1,
-            font=dict(color="#8faabf", size=11),
-            orientation="v", x=0.01, y=0.99,
-            xanchor="left", yanchor="top",
-        ),
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-    # Stats strip below map
-    s1, s2, s3, s4 = st.columns(4)
-    s1.metric("Segments Shown", f"{len(fdf):,}")
-    s2.metric("Critical",       int((fdf["risk_level"] == "Critical").sum()))
-    s3.metric("High",           int((fdf["risk_level"] == "High").sum()))
-    s4.metric("Avg Risk",       f"{fdf['risk_score'].mean():.1f}" if len(fdf) else "—")
+# Stats strip below map
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Segments Shown", f"{len(fdf):,}")
+s2.metric("Critical",       int((fdf["risk_level"] == "Critical").sum()))
+s3.metric("High",           int((fdf["risk_level"] == "High").sum()))
+s4.metric("Avg Risk",       f"{fdf['risk_score'].mean():.1f}" if len(fdf) else "—")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -404,17 +360,21 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
     section_title(f"Top 50 Replacement Candidates — Sorted by {sort_mode}")
 
-    # Quick-select buttons
-    qs0, qs1, qs2, qs3, _ = st.columns([1.1, 1.1, 1.1, 1.0, 4])
+    # Quick-select buttons — compact row with clear visual separation
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem">',
+        unsafe_allow_html=True,
+    )
+    qs0, qs1, qs2, qs3, _ = st.columns([1.2, 1.2, 0.9, 1.0, 5])
     with qs0:
-        if st.button("Select Critical", key="qs_critical"):
+        if st.button("🔴  Select Critical", key="qs_critical"):
             st.session_state.selected_pipe_ids = (
                 ranked[ranked["risk_level"].astype(str) == "Critical"]["pipe_id"].tolist()
             )
             st.session_state.generated_report = None
             st.rerun()
     with qs1:
-        if st.button("Budget Picks", key="qs_budget"):
+        if st.button("💰  Budget Picks", key="qs_budget"):
             st.session_state.selected_pipe_ids = ranked[ranked["in_budget"]]["pipe_id"].tolist()
             st.session_state.generated_report = None
             st.rerun()
@@ -424,7 +384,7 @@ with tab1:
             st.session_state.generated_report = None
             st.rerun()
     with qs3:
-        if st.button("Clear All", key="qs_clear"):
+        if st.button("✕  Clear", key="qs_clear"):
             st.session_state.selected_pipe_ids = []
             st.session_state.generated_report = None
             st.rerun()

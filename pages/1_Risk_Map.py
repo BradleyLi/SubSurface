@@ -23,6 +23,7 @@ st.set_page_config(
 from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils  import get_shap, RISK_COLORS
+from map_viz import build_risk_map_deck, map_view_toolbar, render_map
 
 inject_css()
 
@@ -162,123 +163,20 @@ with map_col:
         else "Toronto Watermain Network — Transmission vs Distribution"
     )
 
-    fig = go.Figure()
-
-    if color_mode == "Pipe Type" and has_layers:
-        # ── Color by Pipe Type ──────────────────────────────────────────────
-        # Render Distribution first so Transmission appears on top
-        for ptype in ["Distribution", "Transmission"]:
-            sub = fdf[fdf["pipe_type"] == ptype]
-            if sub.empty:
-                continue
-            lats, lons = [], []
-            for _, r in sub.iterrows():
-                lats.extend([r["lat0"], r["lat1"], None])
-                lons.extend([r["lon0"], r["lon1"], None])
-            fig.add_trace(go.Scattermap(
-                lat=lats, lon=lons,
-                mode="lines",
-                line=dict(width=TYPE_WIDTHS[ptype], color=TYPE_COLORS[ptype]),
-                name=ptype,
-                hoverinfo="none",
-                showlegend=True,
-            ))
-
-    else:
-        # ── Color by Risk Level (default) ───────────────────────────────────
-        # Transmission = thicker lines; Distribution = thinner lines.
-        # One legend entry per risk level (using legendgroup to merge Tx/Dist).
-        risk_base_widths = {"Critical": 3.5, "High": 3.0, "Medium": 2.5, "Low": 2.0}
-        for level in ["Critical", "High", "Medium", "Low"]:
-            color      = RISK_COLORS[level]
-            base_width = risk_base_widths[level]
-
-            if has_layers:
-                # Two sub-traces per risk level — merged in legend via legendgroup
-                for idx, ptype in enumerate(["Distribution", "Transmission"]):
-                    sub = fdf[(fdf["risk_level"] == level) & (fdf["pipe_type"] == ptype)]
-                    if sub.empty:
-                        continue
-                    lats, lons = [], []
-                    for _, r in sub.iterrows():
-                        lats.extend([r["lat0"], r["lat1"], None])
-                        lons.extend([r["lon0"], r["lon1"], None])
-                    width = base_width + (0.8 if ptype == "Transmission" else 0)
-                    fig.add_trace(go.Scattermap(
-                        lat=lats, lon=lons,
-                        mode="lines",
-                        line=dict(width=width, color=color),
-                        name=level,
-                        legendgroup=level,
-                        showlegend=(idx == 1),   # show legend entry once (for Transmission)
-                        hoverinfo="none",
-                    ))
-            else:
-                sub = fdf[fdf["risk_level"] == level]
-                if sub.empty:
-                    continue
-                lats, lons = [], []
-                for _, r in sub.iterrows():
-                    lats.extend([r["lat0"], r["lat1"], None])
-                    lons.extend([r["lon0"], r["lon1"], None])
-                fig.add_trace(go.Scattermap(
-                    lat=lats, lon=lons,
-                    mode="lines",
-                    line=dict(width=base_width, color=color),
-                    name=level,
-                    hoverinfo="none",
-                    showlegend=True,
-                ))
-
-    # ── Hover-able midpoints (always shown) ──────────────────────────────────
-    if not fdf.empty:
-        hover_type = fdf["pipe_type"] if "pipe_type" in fdf.columns else ["—"] * len(fdf)
-        fig.add_trace(go.Scattermap(
-            lat=fdf["lat"], lon=fdf["lon"],
-            mode="markers",
-            marker=dict(
-                size=fdf["diameter_mm"].apply(lambda d: max(5, d / 40)).tolist(),
-                color=fdf["risk_color"].tolist(),
-                opacity=0.0,
-            ),
-            text=fdf["pipe_id"],
-            customdata=fdf[["risk_score", "material", "age", "ward",
-                            "risk_level", "diameter_mm", "emergency_cost",
-                            "pipe_type"]].values,
-            hovertemplate=(
-                "<b>%{text}</b><br>"
-                "Type: <b>%{customdata[7]}</b><br>"
-                "Risk Score: <b>%{customdata[0]:.1f}%</b><br>"
-                "Material: %{customdata[1]}<br>"
-                "Age: %{customdata[2]} years<br>"
-                "Ward: %{customdata[3]}<br>"
-                "Diameter: %{customdata[5]}mm<br>"
-                "Emergency Cost: $%{customdata[6]:,}<extra></extra>"
-            ),
-            name="hover",
-            showlegend=False,
-        ))
-
-    fig.update_layout(
-        map=dict(
-            style="carto-darkmatter",
-            center=dict(lat=43.70, lon=-79.38),
-            zoom=10.5,
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=0, b=0),
-        height=560,
-        legend=dict(
-            bgcolor="#0d1b2a",
-            bordercolor="#162033",
-            borderwidth=1,
-            font=dict(color="#8faabf", size=11),
-            orientation="v",
-            x=0.01, y=0.99,
-            xanchor="left", yanchor="top",
-        ),
+    map_view = map_view_toolbar("page_risk", zoom=10.5)
+    deck = build_risk_map_deck(
+        fdf,
+        color_mode=color_mode,
+        has_layers=has_layers,
+        risk_colors=RISK_COLORS,
+        type_colors=TYPE_COLORS,
+        type_widths=TYPE_WIDTHS,
+        show_buildings=map_view.show_buildings,
+        view_3d=map_view.view_3d,
+        zoom=map_view.zoom,
+        map_style_name=map_view.map_style_name,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    render_map(deck, height=560)
 
 # ── Detail panel ──────────────────────────────────────────────────────────────
 with detail_col:

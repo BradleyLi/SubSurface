@@ -223,24 +223,99 @@ footer { visibility: hidden; }
 }
 .stTabs [data-baseweb="tab-panel"] { padding-top: 1.2rem; }
 
-/* ── Buttons ── */
+/* ── Buttons — ghost outline default ── */
 .stButton > button {
+    background: transparent !important;
+    color: #8faabf !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    border: 1px solid #1a3050 !important;
+    border-radius: 6px !important;
+    padding: 0.42rem 1.1rem !important;
+    letter-spacing: 0.03em !important;
+    font-size: 0.82rem !important;
+    transition: all 0.16s ease !important;
+}
+.stButton > button:hover {
+    color: #c9d8ea !important;
+    border-color: #1de9b650 !important;
+    background: #1de9b60a !important;
+    opacity: 1 !important;
+}
+
+/* Primary / CTA buttons — teal filled */
+[data-testid="baseButton-primary"] {
     background: linear-gradient(135deg, #1de9b6 0%, #00acc1 100%) !important;
     color: #050b18 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     border: none !important;
-    border-radius: 6px !important;
-    padding: 0.45rem 1.4rem !important;
-    letter-spacing: 0.04em;
-    transition: opacity 0.18s ease;
+    font-size: 0.88rem !important;
 }
-.stButton > button:hover { opacity: 0.82 !important; }
+[data-testid="baseButton-primary"]:hover {
+    opacity: 0.85 !important;
+    background: linear-gradient(135deg, #1de9b6 0%, #00acc1 100%) !important;
+}
 
 /* Danger button variant */
 .danger-btn .stButton > button {
     background: linear-gradient(135deg, #ff3d3d 0%, #c62828 100%) !important;
     color: #fff !important;
+    border: none !important;
+}
+
+/* ── AI Insight Strip ── */
+.ai-strip {
+    display: flex;
+    gap: 0.75rem;
+    margin: 0.6rem 0 1.2rem;
+    flex-wrap: wrap;
+}
+.ai-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #080f1d;
+    border: 1px solid #162033;
+    border-radius: 8px;
+    padding: 0.55rem 1rem;
+    flex: 1;
+    min-width: 180px;
+    position: relative;
+    overflow: hidden;
+}
+.ai-chip::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 8px 0 0 8px;
+}
+.ai-chip.critical::before { background: #ff3d3d; }
+.ai-chip.warn::before     { background: #ffa726; }
+.ai-chip.ok::before       { background: #1de9b6; }
+.ai-chip-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
+.ai-chip-body { flex: 1; }
+.ai-chip-label {
+    font-size: 0.62rem;
+    color: #3d5a78;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1;
+}
+.ai-chip-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #c9d8ea;
+    line-height: 1.25;
+    margin-top: 0.1rem;
+}
+.ai-chip-sub {
+    font-size: 0.68rem;
+    color: #3d5a78;
+    margin-top: 0.05rem;
+    line-height: 1.3;
 }
 
 /* ── Selectbox / inputs ── */
@@ -573,6 +648,57 @@ hr { border-color: #162033 !important; }
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-top: 0.15rem;
+}
+
+/* deck.gl / pydeck map chrome */
+.cn-map-toolbar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    background: linear-gradient(180deg, #0a1525 0%, #07101f 100%);
+    border: 1px solid #162033;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    padding: 0.55rem 0.65rem 0.45rem;
+    margin-bottom: 0;
+}
+.cn-map-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.32rem 0.55rem;
+    border-radius: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap;
+}
+.cn-map-badge-ok {
+    color: #1de9b6;
+    background: #1de9b612;
+    border: 1px solid #1de9b635;
+}
+.cn-map-badge-warn {
+    color: #ffa726;
+    background: #ffa72612;
+    border: 1px solid #ffa72635;
+}
+.cn-map-frame {
+    border: 1px solid #162033;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    background: #061624;
+}
+.cn-map-frame div[data-testid="stDeckGlJsonChart"] {
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+.cn-map-toolbar-wrap + div .cn-map-frame,
+.cn-map-toolbar-wrap ~ div [data-testid="stVerticalBlock"] .cn-map-frame {
+    margin-top: 0;
+}
+div[data-testid="stDeckGlJsonChart"] iframe {
+    border-radius: 0 0 8px 8px !important;
 }
 </style>
 """

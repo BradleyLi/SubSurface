@@ -105,6 +105,7 @@ def _get_synthetic_pipes() -> pd.DataFrame:
                 "lat0": lat0, "lon0": lon0, "lat1": lat1, "lon1": lon1,
                 "lat":  (lat0 + lat1) / 2,
                 "lon":  (lon0 + lon1) / 2,
+                "path": [[lon0, lat0], [lon1, lat1]],
                 "tree_count_5m":         int(rng.poisson(2.4)),
                 "complaints_12mo":       int(rng.poisson(1.9)),
                 "utility_cuts_18mo":     int(min(rng.poisson(0.7), 7)),

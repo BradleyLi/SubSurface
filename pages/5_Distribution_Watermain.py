@@ -8,7 +8,6 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
@@ -22,6 +21,7 @@ st.set_page_config(
 from app_styles import inject_css, section_title
 from api_client import get_watermains_layer_api
 from data_utils import RISK_COLORS
+from map_viz import build_grouped_line_map_deck, map_view_toolbar, render_map
 
 inject_css()
 
@@ -37,17 +37,18 @@ st.markdown(
 )
 
 # ── Material colour palette ────────────────────────────────────────────────────
+# High-contrast palette — each color reads clearly on Mapbox dark-v10 background.
 MAT_COLORS: dict[str, str] = {
-    "Cast Iron":        "#ff7043",
-    "Asbestos Cement":  "#ab47bc",
-    "Concrete":         "#78909c",
-    "Ductile Iron":     "#26c6da",
-    "PVC":              "#66bb6a",
+    "Cast Iron":        "#ff1744",   # vivid red      — most common, highest risk
+    "Asbestos Cement":  "#d500f9",   # electric purple — hazardous legacy material
+    "Concrete":         "#2979ff",   # electric blue
+    "Ductile Iron":     "#00e5ff",   # bright cyan
+    "PVC":              "#76ff03",   # lime green      — newest, lowest risk
 }
 DEFAULT_MAT_COLOR = "#90a4ae"
 TYPE_COLORS: dict[str, str] = {
-    "Transmission": "#1de9b6",
-    "Distribution": "#4fc3f7",
+    "Transmission": "#1de9b6",   # teal — large mains
+    "Distribution": "#ff9100",   # amber — local mains
 }
 
 # ── Top Nav ───────────────────────────────────────────────────────────────────
@@ -213,135 +214,62 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Build map traces ───────────────────────────────────────────────────────────
-fig = go.Figure()
+# ── Build deck.gl map ──────────────────────────────────────────────────────────
+map_groups: list[tuple[str, pd.DataFrame, str, float]] = []
 
 if color_by == "Material":
-    groups = dff.groupby("material")
-    for mat, grp in groups:
-        color = MAT_COLORS.get(mat, DEFAULT_MAT_COLOR)
-        lats, lons = [], []
-        for _, row in grp.iterrows():
-            lats += [row["lat0"], row["lat1"], None]
-            lons += [row["lon0"], row["lon1"], None]
-        fig.add_trace(go.Scattermapbox(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(color=color, width=1.6),
-            name=mat,
-            hoverinfo="name",
-        ))
+    for mat, grp in dff.groupby("material"):
+        map_groups.append((mat, grp, MAT_COLORS.get(mat, DEFAULT_MAT_COLOR), 3))
 
 elif color_by == "Pipe Type":
     for ptype in ["Distribution", "Transmission"]:
         grp = dff[dff["pipe_type"] == ptype]
-        if grp.empty:
-            continue
-        color = TYPE_COLORS.get(ptype, DEFAULT_MAT_COLOR)
-        width = 2.0 if ptype == "Distribution" else 3.0
-        lats, lons = [], []
-        for _, row in grp.iterrows():
-            lats += [row["lat0"], row["lat1"], None]
-            lons += [row["lon0"], row["lon1"], None]
-        fig.add_trace(go.Scattermapbox(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(color=color, width=width),
-            name=ptype,
-            hoverinfo="name",
-        ))
+        if not grp.empty:
+            w = 2.5 if ptype == "Distribution" else 4.0
+            map_groups.append((ptype, grp, TYPE_COLORS.get(ptype, DEFAULT_MAT_COLOR), w))
 
 elif color_by == "Risk Level":
-    for lvl in ["Critical", "High", "Medium", "Low"]:
+    for lvl, w in [("Critical", 4), ("High", 3.5), ("Medium", 3), ("Low", 2.5)]:
         grp = dff[dff["risk_level"] == lvl]
-        if grp.empty:
-            continue
-        color = RISK_COLORS.get(lvl, "#90a4ae")
-        lats, lons = [], []
-        for _, row in grp.iterrows():
-            lats += [row["lat0"], row["lat1"], None]
-            lons += [row["lon0"], row["lon1"], None]
-        fig.add_trace(go.Scattermapbox(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(color=color, width=1.6),
-            name=lvl,
-            hoverinfo="name",
-        ))
+        if not grp.empty:
+            map_groups.append((lvl, grp, RISK_COLORS.get(lvl, "#90a4ae"), w))
 
 elif color_by == "Diameter":
-    # Bin into 3 bands: small / medium / large
     d33 = dff["diameter_mm"].quantile(0.33)
     d66 = dff["diameter_mm"].quantile(0.66)
-    bands = [
-        (f"≤{int(d33)} mm",  dff[dff["diameter_mm"] <= d33],              "#4fc3f7"),
-        (f"{int(d33)+1}–{int(d66)} mm", dff[(dff["diameter_mm"] > d33) & (dff["diameter_mm"] <= d66)], "#1de9b6"),
-        (f">{int(d66)} mm",  dff[dff["diameter_mm"] > d66],               "#ffa726"),
-    ]
-    for label, grp, color in bands:
-        if grp.empty:
-            continue
-        lats, lons = [], []
-        for _, row in grp.iterrows():
-            lats += [row["lat0"], row["lat1"], None]
-            lons += [row["lon0"], row["lon1"], None]
-        fig.add_trace(go.Scattermapbox(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(color=color, width=1.6),
-            name=label,
-            hoverinfo="name",
-        ))
+    for label, grp, color, w in [
+        (f"≤{int(d33)} mm",           dff[dff["diameter_mm"] <= d33],                                          "#00e5ff", 2),
+        (f"{int(d33)+1}–{int(d66)} mm", dff[(dff["diameter_mm"] > d33) & (dff["diameter_mm"] <= d66)],        "#ff9100", 3),
+        (f">{int(d66)} mm",            dff[dff["diameter_mm"] > d66],                                          "#ff1744", 4),
+    ]:
+        if not grp.empty:
+            map_groups.append((label, grp, color, w))
 
 else:  # Age
     a33 = dff["age"].quantile(0.33)
     a66 = dff["age"].quantile(0.66)
-    bands = [
-        (f"<{int(a33)} yrs",           dff[dff["age"] < a33],                          "#66bb6a"),
-        (f"{int(a33)}–{int(a66)} yrs", dff[(dff["age"] >= a33) & (dff["age"] < a66)],  "#ffa726"),
-        (f">{int(a66)} yrs",           dff[dff["age"] >= a66],                          "#ff5252"),
-    ]
-    for label, grp, color in bands:
-        if grp.empty:
-            continue
-        lats, lons = [], []
-        for _, row in grp.iterrows():
-            lats += [row["lat0"], row["lat1"], None]
-            lons += [row["lon0"], row["lon1"], None]
-        fig.add_trace(go.Scattermapbox(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(color=color, width=1.6),
-            name=label,
-            hoverinfo="name",
-        ))
+    for label, grp, color in [
+        (f"<{int(a33)} yrs",             dff[dff["age"] < a33],                                      "#76ff03"),
+        (f"{int(a33)}–{int(a66)} yrs",   dff[(dff["age"] >= a33) & (dff["age"] < a66)],             "#ff9100"),
+        (f">{int(a66)} yrs",             dff[dff["age"] >= a66],                                     "#ff1744"),
+    ]:
+        if not grp.empty:
+            map_groups.append((label, grp, color, 3))
 
 center_lat = float(dff["lat"].mean()) if not dff.empty else 43.70
 center_lon = float(dff["lon"].mean()) if not dff.empty else -79.42
 
-fig.update_layout(
-    mapbox=dict(
-        style="carto-darkmatter",
-        center=dict(lat=center_lat, lon=center_lon),
-        zoom=11,
-    ),
-    paper_bgcolor="#061624",
-    plot_bgcolor="#061624",
-    margin=dict(l=0, r=0, t=0, b=0),
-    height=560,
-    legend=dict(
-        bgcolor="rgba(6,22,36,0.85)",
-        bordercolor="#1e3a54",
-        borderwidth=1,
-        font=dict(color="#e8f4fd", size=11),
-        orientation="v",
-        x=0.01, y=0.99,
-        xanchor="left", yanchor="top",
-    ),
-    uirevision="dist-map",
+map_view = map_view_toolbar("dist_wm", zoom=11.0)
+deck = build_grouped_line_map_deck(
+    map_groups,
+    center_lat=center_lat,
+    center_lon=center_lon,
+    zoom=map_view.zoom,
+    show_buildings=map_view.show_buildings,
+    view_3d=map_view.view_3d,
+    map_style_name=map_view.map_style_name,
 )
-
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+render_map(deck, height=560)
 
 # ── Material breakdown table ──────────────────────────────────────────────────
 st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)

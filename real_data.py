@@ -153,8 +153,10 @@ def _fetch_geojson(url: str, max_features: Optional[int] = None) -> list[dict]:
 
 # ── GeoJSON → row parsing ─────────────────────────────────────────────────────
 
-def _coords_from_geom(geom: dict) -> Optional[tuple[float, float, float, float]]:
-    """Return (lat0, lon0, lat1, lon1) from a LineString or MultiLineString."""
+def _coords_from_geom(
+    geom: dict,
+) -> Optional[tuple[float, float, float, float, list]]:
+    """Return (lat0, lon0, lat1, lon1, all_lonlat_pairs) from a LineString or MultiLineString."""
     gtype = geom.get("type", "")
     raw   = geom.get("coordinates", [])
 
@@ -171,7 +173,9 @@ def _coords_from_geom(geom: dict) -> Optional[tuple[float, float, float, float]]
     # GeoJSON coordinates are [lon, lat]
     lon0, lat0 = float(pts[0][0]),  float(pts[0][1])
     lon1, lat1 = float(pts[-1][0]), float(pts[-1][1])
-    return lat0, lon0, lat1, lon1
+    # Full path: keep all intermediate vertices (capped for perf)
+    all_coords = [[float(p[0]), float(p[1])] for p in pts[:64]]
+    return lat0, lon0, lat1, lon1, all_coords
 
 
 def _street_to_ward(lat: float, lon: float) -> str:
@@ -199,7 +203,7 @@ def _parse_features(features: list[dict], pipe_type: str) -> list[dict]:
         if not coords:
             continue
 
-        lat0, lon0, lat1, lon1 = coords
+        lat0, lon0, lat1, lon1, all_coords = coords
 
         # Sanity-check: skip anything outside greater Toronto bounds
         if not (43.5 < lat0 < 44.1 and -80.0 < lon0 < -79.0):
@@ -247,6 +251,7 @@ def _parse_features(features: list[dict], pipe_type: str) -> list[dict]:
             "lat1": lat1, "lon1": lon1,
             "lat":  (lat0 + lat1) / 2,
             "lon":  (lon0 + lon1) / 2,
+            "path": all_coords,
         })
     return rows
 

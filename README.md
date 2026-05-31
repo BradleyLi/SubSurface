@@ -53,4 +53,25 @@ Notes:
 - **Graph**: cuGraph — cascade failure propagation through pipe network
 - **Explainability**: cuML SHAP — feature contributions per prediction
 - **Agent**: NIM / Nemotron — natural language work orders and what-if analysis
-- **UI**: Streamlit + Plotly
+- **UI**: Streamlit + Plotly (charts) + deck.gl / Mapbox (maps via pydeck)
+
+### Map (Uber-style deck.gl + Mapbox)
+
+Risk and cascade maps use [deck.gl](https://deck.gl/) on a dark Mapbox basemap (same stack Uber describes in their [Mapbox integration post](https://www.uber.com/us/en/blog/uber-visualization-mapbox/)).
+
+Optional — **3D buildings, streets, and labels** (recommended):
+
+```bash
+# Option A — recommended for Streamlit:
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+# Edit secrets.toml and paste your pk.* token (NOT the .example file)
+
+# Option B — shell env:
+export MAPBOX_API_KEY="pk.your_token_here"
+```
+
+**Important:** Streamlit only reads `.streamlit/secrets.toml`. Putting the key in `secrets.toml.example` does nothing.
+
+Without a token, maps fall back to Carto Dark Matter (flat, no extruded buildings).
+
+Use the **3D Buildings** and **3D View** toggles above each map to switch Mapbox Standard (buildings on) vs flat network view.

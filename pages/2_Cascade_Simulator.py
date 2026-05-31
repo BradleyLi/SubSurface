@@ -22,6 +22,7 @@ st.set_page_config(
 from app_styles import inject_css, section_title, risk_badge
 from api_client import get_pipes_api
 from data_utils  import RISK_COLORS
+from map_viz import build_cascade_map_deck, map_view_toolbar, render_map
 
 inject_css()
 
@@ -168,108 +169,21 @@ map_col, stats_col = st.columns([3, 2], gap="large")
 with map_col:
     section_title("Cascade Propagation Map")
 
-    fig = go.Figure()
-
-    # Background network (unaffected — grey)
-    unaffected = df[~df["pipe_id"].isin(nearby["pipe_id"]) & (df["pipe_id"] != selected_id)]
-    un_lats, un_lons = [], []
-    for _, r in unaffected.sample(min(200, len(unaffected)), random_state=42).iterrows():
-        un_lats.extend([r["lat0"], r["lat1"], None])
-        un_lons.extend([r["lon0"], r["lon1"], None])
-    fig.add_trace(go.Scattermap(
-        lat=un_lats, lon=un_lons,
-        mode="lines",
-        line=dict(width=1, color="#1a2e4a"),
-        name="Network",
-        hoverinfo="none",
-        showlegend=True,
-    ))
-
-    # Cascade rings (wave 4 → wave 1, so critical renders on top)
     wave_colors = {1: "#ff3d3d", 2: "#ff6b35", 3: "#ffa726", 4: "#ffdd57"}
-    wave_labels = {1: "Critical loss (0 PSI)", 2: "Severe (25 PSI)", 3: "Moderate (50 PSI)", 4: "Minor (75 PSI)"}
-    for wave in [4, 3, 2, 1]:
-        sub = nearby[nearby["wave"] == wave]
-        if sub.empty:
-            continue
-        lats, lons = [], []
-        for _, r in sub.iterrows():
-            lats.extend([r["lat0"], r["lat1"], None])
-            lons.extend([r["lon0"], r["lon1"], None])
-        fig.add_trace(go.Scattermap(
-            lat=lats, lon=lons,
-            mode="lines",
-            line=dict(width=3.0 + (4 - wave) * 0.5, color=wave_colors[wave]),
-            name=wave_labels[wave],
-            hoverinfo="none",
-            showlegend=True,
-        ))
-
-    # Source pipe — highlight
-    fig.add_trace(go.Scattermap(
-        lat=[source["lat0"], source["lat1"]],
-        lon=[source["lon0"], source["lon1"]],
-        mode="lines",
-        line=dict(width=6, color="#ff0000"),
-        name="⚡ BROKEN PIPE",
-        showlegend=True,
-    ))
-
-    # Source marker (pulsing icon)
-    fig.add_trace(go.Scattermap(
-        lat=[source["lat"]], lon=[source["lon"]],
-        mode="markers+text",
-        marker=dict(size=18, color="#ff3d3d", symbol="circle"),
-        text=["💥"],
-        textposition="middle center",
-        name="Break Point",
-        showlegend=False,
-        hovertemplate=f"<b>BREAK POINT</b><br>{selected_id}<br>"
-                      f"Risk: {source['risk_score']:.1f}%<br>"
-                      f"Emergency cost: ${source['emergency_cost']:,}<extra></extra>",
-    ))
-
-    # Pressure contour rings
-    if show_pressure:
-        for ring_r_deg, psi, opacity in [
-            (deg_radius * 0.25, "0 PSI",  0.25),
-            (deg_radius * 0.5,  "25 PSI", 0.18),
-            (deg_radius * 0.75, "50 PSI", 0.12),
-            (deg_radius,        "75 PSI", 0.08),
-        ]:
-            n_pts = 60
-            theta  = np.linspace(0, 2 * np.pi, n_pts)
-            r_lats = source["lat"] + ring_r_deg * np.cos(theta)
-            r_lons = source["lon"] + ring_r_deg * np.sin(theta) * 1.4
-            fig.add_trace(go.Scattermap(
-                lat=r_lats.tolist() + [r_lats[0]],
-                lon=r_lons.tolist() + [r_lons[0]],
-                mode="lines",
-                line=dict(width=1, color=f"rgba(255,61,61,{opacity})"),
-                name=psi,
-                showlegend=False,
-                hoverinfo="none",
-            ))
-
-    fig.update_layout(
-        map=dict(
-            style="carto-darkmatter",
-            center=dict(lat=source["lat"], lon=source["lon"]),
-            zoom=13.5,
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=0, b=0),
-        height=500,
-        legend=dict(
-            bgcolor="#0d1b2a",
-            bordercolor="#162033",
-            borderwidth=1,
-            font=dict(color="#8faabf", size=10),
-            x=0.01, y=0.99,
-            xanchor="left", yanchor="top",
-        ),
+    map_view = map_view_toolbar("cascade", zoom=13.2)
+    deck = build_cascade_map_deck(
+        df,
+        nearby,
+        source,
+        selected_id=selected_id,
+        wave_colors=wave_colors,
+        show_pressure=show_pressure,
+        deg_radius=deg_radius,
+        show_buildings=map_view.show_buildings,
+        view_3d=map_view.view_3d,
+        map_style_name=map_view.map_style_name,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    render_map(deck, height=500)
 
 # STATS PANEL
 with stats_col:
